@@ -1,0 +1,22 @@
+# Binaries / build
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+*.gif
+
+# Upload inputs and outputs (keep the directory via .gitkeep)
+upload/*
+!upload/.gitkeep
+
+# Go / coverage
+coverage.out
+coverage.html
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

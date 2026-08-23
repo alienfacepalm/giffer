@@ -1,0 +1,12 @@
+---
+description: Go testing and quality checks for this repo
+alwaysApply: true
+---
+
+# Go Quality Bar
+
+- Keep conversion logic in `internal/convert` and CLI wiring in `internal/cli`; `cmd/giffer` stays a thin main.
+- Prefer table-driven tests; cover SPEC edge cases (bad zip, no images, invalid flags, sort order, resize).
+- Do not commit files under `upload/` (except `upload/.gitkeep`); use tiny synthetic fixtures in tests.
+- Before finishing Go changes, run `go test ./...` and `go vet ./...`. Prefer `make check` when Make is available.
+- Use `cli.Run` for command tests; do not shell out to the binary in unit tests.

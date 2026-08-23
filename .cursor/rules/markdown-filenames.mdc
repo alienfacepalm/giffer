@@ -1,0 +1,14 @@
+---
+description: Markdown filenames must be ALL CAPS
+globs: "**/*.md"
+alwaysApply: true
+---
+
+# ALL CAPS Markdown Filenames
+
+- Every `.md` file basename must be ALL CAPS.
+- Keep the extension as `.md` (lowercase).
+- Examples: `SPEC.md`, `README.md`, `CONTRIBUTING.md`
+- Bad: `spec.md`, `Spec.md`, `Readme.md`
+- When creating or renaming markdown files, use the ALL CAPS form.
+- If you find a non-ALL-CAPS `.md` filename, rename it to match this rule.
