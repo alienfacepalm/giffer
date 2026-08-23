@@ -186,6 +186,154 @@ func TestZipToGIFAcceptsJPEG(t *testing.T) {
 	}
 }
 
+func TestZipToGIFAcceptsWebPAndGIF(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	outPath := filepath.Join(dir, "out.gif")
+
+	var gifBuf bytes.Buffer
+	if err := gif.Encode(&gifBuf, solid(40, 20, color.RGBA{0, 0, 255, 255}), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"b.webp": {raw: tinyWebP},
+		"a.gif":  {raw: gifBuf.Bytes()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 800,
+		Loop:     0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2 (gif then webp by basename)", len(g.Image))
+	}
+}
+
+func TestDirToGIFSuccess(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "photos")
+	outPath := filepath.Join(dir, "photos.gif")
+	if err := os.MkdirAll(filepath.Join(src, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(src, "nested", "z.png"), 100, 50); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(src, "a.png"), 120, 60); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "readme.txt"), []byte("not an image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(src, "__MACOSX"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(src, "__MACOSX", "skip.png"), 8, 8); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DirToGIF(Options{
+		Input:    src,
+		Output:   outPath,
+		DelayMS:  500,
+		MaxWidth: 80,
+		Loop:     0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
+	}
+	if g.Image[0].Bounds().Dx() != 80 {
+		t.Fatalf("width=%d want 80 (resized)", g.Image[0].Bounds().Dx())
+	}
+}
+
+func TestDirToGIFEmpty(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "empty")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "readme.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := DirToGIF(Options{
+		Input:    src,
+		Output:   filepath.Join(dir, "empty.gif"),
+		DelayMS:  500,
+		MaxWidth: 800,
+	})
+	if err == nil || !strings.Contains(err.Error(), "no supported images") {
+		t.Fatalf("want no supported images error, got %v", err)
+	}
+}
+
+func TestHasImages(t *testing.T) {
+	dir := t.TempDir()
+	with := filepath.Join(dir, "with")
+	without := filepath.Join(dir, "without")
+	if err := os.MkdirAll(with, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(without, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(with, "a.png"), 10, 10); err != nil {
+		t.Fatal(err)
+	}
+	if !HasImages(with) {
+		t.Fatal("expected HasImages true")
+	}
+	if HasImages(without) {
+		t.Fatal("expected HasImages false")
+	}
+}
+
+func TestConvertDispatches(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	dirPath := filepath.Join(dir, "album")
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"a.png": {img: solid(20, 10, color.White), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(dirPath, "b.png"), 20, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	zipOut := filepath.Join(dir, "fromzip.gif")
+	if err := Convert(Options{Input: zipPath, Output: zipOut, DelayMS: 100, MaxWidth: 800, Loop: 0}); err != nil {
+		t.Fatal(err)
+	}
+	dirOut := filepath.Join(dir, "fromdir.gif")
+	if err := Convert(Options{Input: dirPath, Output: dirOut, DelayMS: 100, MaxWidth: 800, Loop: 0}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(zipOut); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dirOut); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestZipToGIFErrors(t *testing.T) {
 	dir := t.TempDir()
 
@@ -263,6 +411,14 @@ type imageEntry struct {
 	raw    []byte
 }
 
+// tinyWebP is a minimal valid 1x1 lossy WebP used as a decode fixture.
+var tinyWebP = []byte{
+	0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+	0x56, 0x50, 0x38, 0x20, 0x18, 0x00, 0x00, 0x00, 0x30, 0x01, 0x00, 0x9d,
+	0x01, 0x2a, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x34, 0x25, 0xa4, 0x00,
+	0x03, 0x70, 0x00, 0xfe, 0xfb, 0xfd, 0x50, 0x00,
+}
+
 func solid(w, h int, c color.Color) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for y := 0; y < h; y++ {
@@ -285,6 +441,15 @@ func decodeGIF(t *testing.T, path string) *gif.GIF {
 		t.Fatal(err)
 	}
 	return g
+}
+
+func writePNGFile(path string, w, h int) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, solid(w, h, color.White))
 }
 
 func writeTestZip(path string, files map[string]imageEntry) error {
