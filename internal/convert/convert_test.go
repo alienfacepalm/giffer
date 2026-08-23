@@ -186,6 +186,39 @@ func TestZipToGIFAcceptsJPEG(t *testing.T) {
 	}
 }
 
+func TestZipToGIFAcceptsWebPAndGIF(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	outPath := filepath.Join(dir, "out.gif")
+
+	var gifBuf bytes.Buffer
+	if err := gif.Encode(&gifBuf, solid(40, 20, color.RGBA{0, 0, 255, 255}), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"b.webp": {raw: tinyWebP},
+		"a.gif":  {raw: gifBuf.Bytes()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 800,
+		Loop:     0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2 (gif then webp by basename)", len(g.Image))
+	}
+}
+
 func TestDirToGIFSuccess(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "photos")
@@ -376,6 +409,14 @@ type imageEntry struct {
 	img    image.Image
 	format string // png or jpeg
 	raw    []byte
+}
+
+// tinyWebP is a minimal valid 1x1 lossy WebP used as a decode fixture.
+var tinyWebP = []byte{
+	0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+	0x56, 0x50, 0x38, 0x20, 0x18, 0x00, 0x00, 0x00, 0x30, 0x01, 0x00, 0x9d,
+	0x01, 0x2a, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x34, 0x25, 0xa4, 0x00,
+	0x03, 0x70, 0x00, 0xfe, 0xfb, 0xfd, 0x50, 0x00,
 }
 
 func solid(w, h int, c color.Color) image.Image {

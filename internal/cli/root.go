@@ -134,7 +134,7 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 		return nil
 	}
 
-	workers := runtime.NumCPU()
+	workers := runtime.GOMAXPROCS(0)
 	if workers < 1 {
 		workers = 1
 	}
@@ -181,16 +181,17 @@ func discoverUploadJobs(uploadDir string) ([]batchJob, error) {
 		return nil, fmt.Errorf("upload directory %q: %w", uploadDir, err)
 	}
 
-	byOutput := make(map[string]string) // output -> input
+	byOutput := make(map[string]string) // lower(output) -> input
 	var jobs []batchJob
 	var collisions []string
 
 	addJob := func(input, output string) {
-		if prev, ok := byOutput[output]; ok {
+		key := strings.ToLower(filepath.Clean(output))
+		if prev, ok := byOutput[key]; ok {
 			collisions = append(collisions, fmt.Sprintf("%s and %s both target %s", prev, input, output))
 			return
 		}
-		byOutput[output] = input
+		byOutput[key] = input
 		jobs = append(jobs, batchJob{Input: input, Output: output})
 	}
 

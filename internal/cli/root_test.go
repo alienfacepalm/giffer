@@ -6,6 +6,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -250,6 +251,137 @@ func TestRunBatchEmptyUpload(t *testing.T) {
 	code := Run(nil, stdout, stderr)
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestRunBatchMissingUpload(t *testing.T) {
+	root := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run(nil, stdout, stderr)
+	if code != exitRuntime {
+		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "upload") {
+		t.Fatalf("stderr=%q", stderr.String())
+	}
+}
+
+func TestRunBatchPartialFailure(t *testing.T) {
+	root := t.TempDir()
+	upload := filepath.Join(root, "upload")
+	if err := os.MkdirAll(upload, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGZip(filepath.Join(upload, "good.zip"), "a.png", 20, 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(upload, "bad.zip"), []byte("not-a-zip"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run(nil, stdout, stderr)
+	if code != exitRuntime {
+		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "bad.zip") {
+		t.Fatalf("expected per-job error for bad.zip, stderr=%q", stderr.String())
+	}
+	if !strings.Contains(stdout.String(), filepath.Join("upload", "good.gif")) {
+		t.Fatalf("expected good.gif on stdout, got %q", stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "upload", "good.gif")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunBatchTunables(t *testing.T) {
+	root := t.TempDir()
+	upload := filepath.Join(root, "upload")
+	if err := os.MkdirAll(upload, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(upload, "wide.zip")
+	f, err := os.Create(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	for _, name := range []string{"a.png", "b.png"} {
+		wr, err := zw.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		img := image.NewRGBA(image.Rect(0, 0, 100, 40))
+		for y := 0; y < 40; y++ {
+			for x := 0; x < 100; x++ {
+				img.Set(x, y, color.White)
+			}
+		}
+		if err := png.Encode(wr, img); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run([]string{"--delay-ms", "200", "--max-width", "50", "--loop", "3"}, stdout, stderr)
+	if code != exitOK {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	outPath := filepath.Join(root, "upload", "wide.gif")
+	outFile, err := os.Open(outPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outFile.Close()
+	g, err := gif.DecodeAll(outFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
+	}
+	if g.LoopCount != 3 {
+		t.Fatalf("loop=%d want 3", g.LoopCount)
+	}
+	if g.Delay[0] != 20 {
+		t.Fatalf("delay=%d want 20", g.Delay[0])
+	}
+	if g.Image[0].Bounds().Dx() != 50 {
+		t.Fatalf("width=%d want 50", g.Image[0].Bounds().Dx())
 	}
 }
 
