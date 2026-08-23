@@ -9,7 +9,7 @@ Giffer turns a zip of photos (or a directory of photos) into a single animated G
 | Phase | Scope | Status |
 |-------|--------|--------|
 | **1 — CLI** | Zip/dir path in → GIF on disk; batch mode for `upload/`; all conversion behavior and parameters | Required |
-| **2 — UI** | Thin local upload UI wrapping the same converter and parameters | Optional |
+| **2 — UI** | Thin local upload UI wrapping the same converter and parameters (`giffer ui`) | Optional |
 
 Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is not required for a finished product.
 

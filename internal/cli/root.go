@@ -102,6 +102,7 @@ func newRootCmd() *cobra.Command {
 	cmd.Flags().IntVar(&maxWidth, "max-width", 800, "max frame width in px; height scales to preserve aspect")
 	cmd.Flags().IntVar(&loop, "loop", 0, "GIF loop count; 0 means loop forever")
 
+	cmd.AddCommand(newUICmd())
 	return cmd
 }
 

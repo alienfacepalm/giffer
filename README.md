@@ -26,3 +26,12 @@ Single conversion:
 | `--delay-ms` | `500` | frame delay |
 | `--max-width` | `800` | max frame width |
 | `--loop` | `0` | `0` = loop forever |
+
+## Local UI
+
+```bash
+./giffer ui
+```
+
+Opens a local page at `http://127.0.0.1:8765` (override with `--addr`). Uploaded zips and GIF output land in `upload/` (override with `--upload-dir`).
+

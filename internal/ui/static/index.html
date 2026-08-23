@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>giffer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <div class="stage">
+    <header class="brand">
+      <p class="mark">giffer</p>
+      <h1>Zip in. Motion out.</h1>
+      <p class="lede">Drop a photo zip. Tune the frame, hit convert, grab the GIF.</p>
+    </header>
+
+    <main class="panel">
+      <form id="form" novalidate>
+        <label class="drop" id="drop">
+          <input id="file" name="file" type="file" accept=".zip,application/zip" required />
+          <span class="drop-title" id="drop-label">Drop a .zip here</span>
+          <span class="drop-hint">or click to choose</span>
+        </label>
+
+        <div class="fields">
+          <label>
+            <span>delay-ms</span>
+            <input id="delay-ms" name="delay-ms" type="number" min="1" step="1" value="500" />
+          </label>
+          <label>
+            <span>max-width</span>
+            <input id="max-width" name="max-width" type="number" min="1" step="1" value="800" />
+          </label>
+          <label>
+            <span>loop</span>
+            <input id="loop" name="loop" type="number" min="0" step="1" value="0" />
+          </label>
+        </div>
+
+        <button type="submit" id="go">Convert</button>
+      </form>
+
+      <p class="status" id="status" hidden></p>
+      <figure class="result" id="result" hidden>
+        <img id="preview" alt="Converted GIF preview" />
+        <a id="download" download>Download GIF</a>
+      </figure>
+    </main>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

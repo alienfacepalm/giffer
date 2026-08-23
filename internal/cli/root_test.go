@@ -421,6 +421,17 @@ func TestRunBatchCollision(t *testing.T) {
 	}
 }
 
+func TestRunUIHelp(t *testing.T) {
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run([]string{"ui", "--help"}, stdout, stderr)
+	if code != exitOK {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "local convert UI") {
+		t.Fatalf("help=%q", stdout.String())
+	}
+}
+
 func TestDiscoverUploadJobs(t *testing.T) {
 	dir := t.TempDir()
 	if err := writePNGZip(filepath.Join(dir, "a.zip"), "x.png", 10, 10); err != nil {
