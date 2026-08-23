@@ -50,7 +50,7 @@ func (e *invalidParamsError) Error() string { return e.msg }
 
 func newRootCmd() *cobra.Command {
 	var (
-		input    string
+		inputs   []string
 		output   string
 		delayMS  int
 		maxWidth int
@@ -58,13 +58,20 @@ func newRootCmd() *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:           "giffer",
-		Short:         "Convert a zip of photos into an animated GIF",
+		Use:   "giffer",
+		Short: "Convert photos (zip, files, or directories) into an animated GIF",
+		Long: `Convert one or more inputs into a single animated GIF.
+
+Inputs may be .zip archives, individual image files (jpg/png/webp/gif),
+or directories of images. Repeat --input and/or pass paths as arguments.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, err := validateOptions(input, output, delayMS, maxWidth, loop)
+		Args:          cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			allInputs := append([]string{}, inputs...)
+			allInputs = append(allInputs, args...)
+
+			opts, err := validateOptions(allInputs, output, delayMS, maxWidth, loop)
 			if err != nil {
 				return err
 			}
@@ -75,7 +82,7 @@ func newRootCmd() *cobra.Command {
 				return fmt.Errorf("check output path: %w", err)
 			}
 
-			if err := convert.ZipToGIF(opts); err != nil {
+			if err := convert.ToGIF(opts); err != nil {
 				return err
 			}
 
@@ -84,8 +91,8 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&input, "input", "", "path to input .zip (e.g. upload/photos.zip)")
-	cmd.Flags().StringVar(&output, "output", "", "destination .gif path (default: beside the zip)")
+	cmd.Flags().StringArrayVar(&inputs, "input", nil, "zip, image file, or directory (repeatable)")
+	cmd.Flags().StringVar(&output, "output", "", "destination .gif path (default depends on inputs)")
 	cmd.Flags().IntVar(&delayMS, "delay-ms", 500, "milliseconds each frame is shown")
 	cmd.Flags().IntVar(&maxWidth, "max-width", 800, "max frame width in px; height scales to preserve aspect")
 	cmd.Flags().IntVar(&loop, "loop", 0, "GIF loop count; 0 means loop forever")
@@ -93,13 +100,25 @@ func newRootCmd() *cobra.Command {
 	return cmd
 }
 
-func validateOptions(input, output string, delayMS, maxWidth, loop int) (convert.Options, error) {
-	if strings.TrimSpace(input) == "" {
-		return convert.Options{}, &invalidParamsError{msg: "--input is required"}
+func validateOptions(inputs []string, output string, delayMS, maxWidth, loop int) (convert.Options, error) {
+	cleaned := make([]string, 0, len(inputs))
+	for _, in := range inputs {
+		in = strings.TrimSpace(in)
+		if in == "" {
+			continue
+		}
+		cleaned = append(cleaned, in)
 	}
-	if !strings.EqualFold(filepath.Ext(input), ".zip") {
-		return convert.Options{}, &invalidParamsError{msg: "--input must be a .zip file"}
+	if len(cleaned) == 0 {
+		return convert.Options{}, &invalidParamsError{msg: "at least one input is required (--input and/or path arguments)"}
 	}
+
+	for _, in := range cleaned {
+		if err := validateInputPath(in); err != nil {
+			return convert.Options{}, err
+		}
+	}
+
 	if delayMS <= 0 {
 		return convert.Options{}, &invalidParamsError{msg: "--delay-ms must be an integer > 0"}
 	}
@@ -112,18 +131,67 @@ func validateOptions(input, output string, delayMS, maxWidth, loop int) (convert
 
 	out := strings.TrimSpace(output)
 	if out == "" {
-		base := strings.TrimSuffix(filepath.Base(input), filepath.Ext(input))
-		out = filepath.Join(filepath.Dir(input), base+".gif")
+		out = defaultOutput(cleaned)
 	}
 	if !strings.EqualFold(filepath.Ext(out), ".gif") {
 		return convert.Options{}, &invalidParamsError{msg: "--output must end in .gif"}
 	}
 
 	return convert.Options{
-		Input:    input,
+		Inputs:   cleaned,
 		Output:   out,
 		DelayMS:  delayMS,
 		MaxWidth: maxWidth,
 		Loop:     loop,
 	}, nil
+}
+
+func validateInputPath(in string) error {
+	info, err := os.Stat(in)
+	if err != nil {
+		// Allow missing paths through to convert for consistent runtime errors,
+		// except clearly invalid extensions when the path does not exist as a dir.
+		if os.IsNotExist(err) {
+			ext := strings.ToLower(filepath.Ext(in))
+			switch ext {
+			case ".zip", ".jpg", ".jpeg", ".png", ".webp", ".gif":
+				return nil
+			case "":
+				return nil // may be a directory that will fail at convert time
+			default:
+				return &invalidParamsError{msg: fmt.Sprintf("unsupported input %q: use a .zip, image file, or directory", in)}
+			}
+		}
+		return &invalidParamsError{msg: fmt.Sprintf("cannot access input %q: %v", in, err)}
+	}
+	if info.IsDir() {
+		return nil
+	}
+	ext := strings.ToLower(filepath.Ext(in))
+	switch ext {
+	case ".zip", ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return nil
+	default:
+		return &invalidParamsError{msg: fmt.Sprintf("unsupported input %q: use a .zip, image file, or directory", in)}
+	}
+}
+
+func defaultOutput(inputs []string) string {
+	if len(inputs) == 1 {
+		in := inputs[0]
+		info, err := os.Stat(in)
+		if err == nil && info.IsDir() {
+			base := filepath.Base(in)
+			if base == "." || base == string(filepath.Separator) || base == "" {
+				base = "animation"
+			}
+			return filepath.Join(filepath.Dir(in), base+".gif")
+		}
+		base := strings.TrimSuffix(filepath.Base(in), filepath.Ext(in))
+		if base == "" {
+			base = "animation"
+		}
+		return filepath.Join(filepath.Dir(in), base+".gif")
+	}
+	return "animation.gif"
 }

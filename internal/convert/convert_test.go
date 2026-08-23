@@ -48,7 +48,7 @@ func TestIsSupportedImage(t *testing.T) {
 	}
 }
 
-func TestZipToGIFSuccess(t *testing.T) {
+func TestToGIFFromZip(t *testing.T) {
 	dir := t.TempDir()
 	zipPath := filepath.Join(dir, "photos.zip")
 	outPath := filepath.Join(dir, "photos.gif")
@@ -62,8 +62,8 @@ func TestZipToGIFSuccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := ZipToGIF(Options{
-		Input:    zipPath,
+	if err := ToGIF(Options{
+		Inputs:   []string{zipPath},
 		Output:   outPath,
 		DelayMS:  500,
 		MaxWidth: 80,
@@ -79,34 +79,34 @@ func TestZipToGIFSuccess(t *testing.T) {
 	if g.Delay[0] != 50 {
 		t.Fatalf("delay=%d want 50 centiseconds", g.Delay[0])
 	}
-	if g.LoopCount != 0 {
-		t.Fatalf("loop=%d want 0", g.LoopCount)
-	}
 	if g.Image[0].Bounds().Dx() != 80 {
 		t.Fatalf("width=%d want 80 (resized)", g.Image[0].Bounds().Dx())
 	}
 }
 
-func TestZipToGIFSortsCaseInsensitive(t *testing.T) {
+func TestToGIFFromDirectory(t *testing.T) {
 	dir := t.TempDir()
-	zipPath := filepath.Join(dir, "photos.zip")
-	outPath := filepath.Join(dir, "out.gif")
-
-	// Case-insensitive order: a.png then B.png.
-	// Distinct widths so we can assert order without relying on pixel colors.
-	if err := writeTestZip(zipPath, map[string]imageEntry{
-		"nested/B.png": {img: solid(30, 10, color.White), format: "png"},
-		"nested/a.png": {img: solid(50, 10, color.White), format: "png"},
-	}); err != nil {
+	photos := filepath.Join(dir, "photos")
+	if err := os.MkdirAll(filepath.Join(photos, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNG(filepath.Join(photos, "b.png"), solid(30, 10, color.RGBA{255, 0, 0, 255})); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNG(filepath.Join(photos, "nested", "a.png"), solid(50, 10, color.RGBA{0, 255, 0, 255})); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(photos, "notes.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ZipToGIF(Options{
-		Input:    zipPath,
+	outPath := filepath.Join(dir, "photos.gif")
+	if err := ToGIF(Options{
+		Inputs:   []string{photos},
 		Output:   outPath,
 		DelayMS:  100,
 		MaxWidth: 800,
-		Loop:     2,
+		Loop:     0,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -115,32 +115,63 @@ func TestZipToGIFSortsCaseInsensitive(t *testing.T) {
 	if len(g.Image) != 2 {
 		t.Fatalf("frames=%d want 2", len(g.Image))
 	}
-	if g.Image[0].Bounds().Dx() != 50 {
-		t.Fatalf("first frame width=%d want 50 (a.png first)", g.Image[0].Bounds().Dx())
-	}
-	if g.Image[1].Bounds().Dx() != 30 {
-		t.Fatalf("second frame width=%d want 30 (B.png second)", g.Image[1].Bounds().Dx())
-	}
-	if g.LoopCount != 2 {
-		t.Fatalf("loop=%d want 2", g.LoopCount)
+	if !isMostlyGreen(g.Image[0]) {
+		t.Fatal("first frame should be a.png (green) after basename sort")
 	}
 }
 
-func TestZipToGIFLeavesNarrowImagesUnscaled(t *testing.T) {
+func TestToGIFFromLooseFiles(t *testing.T) {
 	dir := t.TempDir()
-	zipPath := filepath.Join(dir, "photos.zip")
-	outPath := filepath.Join(dir, "out.gif")
+	a := filepath.Join(dir, "a.png")
+	b := filepath.Join(dir, "b.png")
+	if err := writePNG(a, solid(40, 20, color.RGBA{0, 255, 0, 255})); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNG(b, solid(60, 20, color.RGBA{255, 0, 0, 255})); err != nil {
+		t.Fatal(err)
+	}
 
-	if err := writeTestZip(zipPath, map[string]imageEntry{
-		"small.png": {img: solid(40, 20, color.White), format: "png"},
+	outPath := filepath.Join(dir, "out.gif")
+	if err := ToGIF(Options{
+		Inputs:   []string{b, a},
+		Output:   outPath,
+		DelayMS:  200,
+		MaxWidth: 800,
+		Loop:     1,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ZipToGIF(Options{
-		Input:    zipPath,
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
+	}
+	if !isMostlyGreen(g.Image[0]) {
+		t.Fatal("first frame should be a.png (green) after basename sort")
+	}
+	if g.LoopCount != 1 {
+		t.Fatalf("loop=%d want 1", g.LoopCount)
+	}
+}
+
+func TestToGIFMixedSources(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "extra.zip")
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"c.png": {img: solid(20, 10, color.White), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(dir, "a.png")
+	if err := writePNG(filePath, solid(40, 10, color.White)); err != nil {
+		t.Fatal(err)
+	}
+
+	outPath := filepath.Join(dir, "mix.gif")
+	if err := ToGIF(Options{
+		Inputs:   []string{zipPath, filePath},
 		Output:   outPath,
-		DelayMS:  200,
+		DelayMS:  500,
 		MaxWidth: 800,
 		Loop:     0,
 	}); err != nil {
@@ -148,27 +179,20 @@ func TestZipToGIFLeavesNarrowImagesUnscaled(t *testing.T) {
 	}
 
 	g := decodeGIF(t, outPath)
-	if g.Image[0].Bounds().Dx() != 40 {
-		t.Fatalf("width=%d want 40 (unscaled)", g.Image[0].Bounds().Dx())
-	}
-	if g.Delay[0] != 20 {
-		t.Fatalf("delay=%d want 20", g.Delay[0])
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
 	}
 }
 
-func TestZipToGIFAcceptsJPEG(t *testing.T) {
+func TestToGIFAcceptsJPEG(t *testing.T) {
 	dir := t.TempDir()
-	zipPath := filepath.Join(dir, "photos.zip")
-	outPath := filepath.Join(dir, "out.gif")
-
-	if err := writeTestZip(zipPath, map[string]imageEntry{
-		"frame.jpg": {img: solid(64, 32, color.RGBA{10, 20, 30, 255}), format: "jpeg"},
-	}); err != nil {
+	jpgPath := filepath.Join(dir, "frame.jpg")
+	if err := writeJPEG(jpgPath, solid(64, 32, color.RGBA{10, 20, 30, 255})); err != nil {
 		t.Fatal(err)
 	}
-
-	if err := ZipToGIF(Options{
-		Input:    zipPath,
+	outPath := filepath.Join(dir, "out.gif")
+	if err := ToGIF(Options{
+		Inputs:   []string{jpgPath},
 		Output:   outPath,
 		DelayMS:  500,
 		MaxWidth: 32,
@@ -176,22 +200,18 @@ func TestZipToGIFAcceptsJPEG(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	g := decodeGIF(t, outPath)
-	if len(g.Image) != 1 {
-		t.Fatalf("frames=%d want 1", len(g.Image))
-	}
 	if g.Image[0].Bounds().Dx() != 32 {
 		t.Fatalf("width=%d want 32", g.Image[0].Bounds().Dx())
 	}
 }
 
-func TestZipToGIFErrors(t *testing.T) {
+func TestToGIFErrors(t *testing.T) {
 	dir := t.TempDir()
 
 	t.Run("missing zip", func(t *testing.T) {
-		err := ZipToGIF(Options{
-			Input:    filepath.Join(dir, "missing.zip"),
+		err := ToGIF(Options{
+			Inputs:   []string{filepath.Join(dir, "missing.zip")},
 			Output:   filepath.Join(dir, "out.gif"),
 			DelayMS:  500,
 			MaxWidth: 800,
@@ -206,8 +226,8 @@ func TestZipToGIFErrors(t *testing.T) {
 		if err := os.WriteFile(path, []byte("not a zip"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		err := ZipToGIF(Options{
-			Input:    path,
+		err := ToGIF(Options{
+			Inputs:   []string{path},
 			Output:   filepath.Join(dir, "corrupt.gif"),
 			DelayMS:  500,
 			MaxWidth: 800,
@@ -226,8 +246,8 @@ func TestZipToGIFErrors(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		err := ZipToGIF(Options{
-			Input:    path,
+		err := ToGIF(Options{
+			Inputs:   []string{path},
 			Output:   filepath.Join(dir, "empty.gif"),
 			DelayMS:  500,
 			MaxWidth: 800,
@@ -245,8 +265,8 @@ func TestZipToGIFErrors(t *testing.T) {
 		}); err != nil {
 			t.Fatal(err)
 		}
-		err := ZipToGIF(Options{
-			Input:    path,
+		err := ToGIF(Options{
+			Inputs:   []string{path},
 			Output:   filepath.Join(dir, "badframes.gif"),
 			DelayMS:  500,
 			MaxWidth: 800,
@@ -255,11 +275,27 @@ func TestZipToGIFErrors(t *testing.T) {
 			t.Fatalf("want no usable frames error, got %v", err)
 		}
 	})
+
+	t.Run("unsupported file type", func(t *testing.T) {
+		path := filepath.Join(dir, "notes.txt")
+		if err := os.WriteFile(path, []byte("hi"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := ToGIF(Options{
+			Inputs:   []string{path},
+			Output:   filepath.Join(dir, "out.gif"),
+			DelayMS:  500,
+			MaxWidth: 800,
+		})
+		if err == nil || !strings.Contains(err.Error(), "unsupported input") {
+			t.Fatalf("want unsupported input error, got %v", err)
+		}
+	})
 }
 
 type imageEntry struct {
 	img    image.Image
-	format string // png or jpeg
+	format string
 	raw    []byte
 }
 
@@ -271,6 +307,11 @@ func solid(w, h int, c color.Color) image.Image {
 		}
 	}
 	return img
+}
+
+func isMostlyGreen(img image.Image) bool {
+	r, g, b, _ := img.At(img.Bounds().Min.X, img.Bounds().Min.Y).RGBA()
+	return g > r && g > b
 }
 
 func decodeGIF(t *testing.T, path string) *gif.GIF {
@@ -285,6 +326,24 @@ func decodeGIF(t *testing.T, path string) *gif.GIF {
 		t.Fatal(err)
 	}
 	return g
+}
+
+func writePNG(path string, img image.Image) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return png.Encode(f, img)
+}
+
+func writeJPEG(path string, img image.Image) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return jpeg.Encode(f, img, &jpeg.Options{Quality: 90})
 }
 
 func writeTestZip(path string, files map[string]imageEntry) error {

@@ -1,88 +1,122 @@
-# Giffer
+# Giffer — SPEC
 
-## Overview
-
-Giffer turns a zip of photos into a single animated GIF. Delivery is phased: **Phase 1 is the CLI** (required). **Phase 2 is an optional local UI** that may never ship. If Phase 2 is built, it reuses the Phase 1 conversion core and the same parameters.
-
-## Phases
+> **TL;DR** — CLI turns zips / images / folders into one GIF. Optional UI later must call the same core.
+> 📦 + 🖼️ + 📁 → 🔤 → ↔️ → 🎞️ · Phase 1 required · Phase 2 optional
 
 | Phase | Scope | Status |
-|-------|--------|--------|
-| **1 — CLI** | Zip path in → GIF on disk; all conversion behavior and parameters | Required |
-| **2 — UI** | Thin local upload UI wrapping the same converter and parameters | Optional |
+|-------|--------|:------:|
+| **1 — CLI** | Inputs → GIF on disk; all conversion + params | ✅ Required |
+| **2 — UI** | Thin local UI over the same converter | ⬜ Optional |
 
-Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is not required for a finished product.
+Phase 1 done = CLI matches this spec end-to-end. Phase 2 is **not** required for a finished product.
+
+User-facing how-to: [README.md](README.md)
 
 ---
 
 ## Phase 1 — CLI
 
-### Pipeline
+### 🔄 Pipeline
+
+**TL;DR:** collect → sort by name → resize → encode GIF.
 
 ```text
-Zip input → Extract images → Sort by filename → Resize to max width → Encode GIF → GIF output
+Inputs (zip / files / dirs) → Collect images → Sort by filename → Resize to max width → Encode GIF → GIF output
 ```
 
-### Inputs
+### 📥 Inputs
 
-- Place input `.zip` archives in the project `upload/` directory.
-- Input must be a `.zip` archive (path may be absolute or relative; examples use `upload/<name>.zip`).
-- Supported image types inside the zip: `jpg` / `jpeg`, `png`, `webp`, and still `gif` frames treated as single images.
+**TL;DR:** Prefer `upload/`. Accept zip, image, or directory (mix OK). Merge all frames into one GIF. Ignore junk. Fail clearly if nothing usable.
+
+<details>
+<summary>📋 Full rules</summary>
+
+- Prefer placing inputs under the project `upload/` directory.
+- Each input path may be:
+  - a `.zip` archive of images
+  - an individual image file (`jpg` / `jpeg`, `png`, `webp`, still `gif`)
+  - a directory of images (searched recursively)
+- Multiple inputs are allowed (repeated `--input` and/or positional path arguments). All collected images are merged into one GIF.
 - Non-image files and junk paths (for example `__MACOSX` and `.DS_Store`) are ignored.
 - Nested folders are allowed; only the file basename is used for sorting and type detection.
-- If the zip is invalid, unreadable, empty of supported images, or contains no usable frames after filtering, the run fails with a clear error.
+- If an input is invalid/unreadable, empty of supported images, or yields no usable frames after filtering, the run fails with a clear error.
 
-### Frame order
+</details>
 
-Frames are ordered by ascending case-insensitive filename (basename only). This is a fixed rule, not a user parameter. EXIF date sorting is out of scope.
+### 🔤 Frame order
 
-### Parameters
+**TL;DR:** A→Z by basename (case-insensitive). Ties → full path. Fixed rule — no EXIF / custom sort.
 
-These are the only user-facing settings.
+<details>
+<summary>📋 Full rules</summary>
 
-| Parameter   | Purpose                                                      | Default                                      | Validation         |
-|-------------|--------------------------------------------------------------|----------------------------------------------|--------------------|
-| `input`     | Path to `.zip` under `upload/`                               | required                                     | must be a `.zip`   |
-| `output`    | Destination `.gif` path                                      | same basename as the zip, beside the zip     | must end in `.gif` |
-| `delay-ms`  | Milliseconds each frame is shown                             | `500`                                        | integer `> 0`      |
-| `max-width` | Max frame width in px; height scales to preserve aspect ratio | `800`                                       | integer `≥ 1`      |
-| `loop`      | GIF loop count; `0` means loop forever                       | `0`                                          | integer `≥ 0`      |
+Frames are ordered by ascending case-insensitive filename (basename only). Ties break on full source path. This is a fixed rule, not a user parameter. EXIF date sorting is out of scope.
+
+</details>
+
+### 🎛️ Parameters
+
+**TL;DR:** Only these five knobs. Defaults: delay `500`, width `800`, loop forever.
+
+| Parameter   | Purpose                                                       | Default                                                             | Validation                                      |
+|-------------|---------------------------------------------------------------|---------------------------------------------------------------------|-------------------------------------------------|
+| `input`     | One or more paths: zip, image file, or directory              | required (at least one)                                             | each path must be zip, supported image, or dir  |
+| `output`    | Destination `.gif` path                                       | single input: `<basename>.gif` beside it; multiple: `animation.gif` | must end in `.gif`                              |
+| `delay-ms`  | Milliseconds each frame is shown                              | `500`                                                               | integer `> 0`                                   |
+| `max-width` | Max frame width in px; height scales to preserve aspect ratio | `800`                                                               | integer `≥ 1`                                   |
+| `loop`      | GIF loop count; `0` means loop forever                        | `0`                                                                 | integer `≥ 0`                                   |
 
 Images already narrower than `max-width` are left at their native width.
 
-### Output
+### 💾 Output
+
+**TL;DR:** One animated GIF. Overwrite if exists (warn). Never crop — aspect preserved.
+
+<details>
+<summary>📋 Full rules</summary>
 
 - Output is a single animated GIF.
 - If the destination file already exists, overwrite it and print a short warning to stderr.
 - Aspect ratio is preserved when resizing; frames are not cropped.
 
-### CLI sketch
+</details>
+
+### 💻 CLI sketch
 
 ```bash
 giffer --input upload/photos.zip --output out.gif --delay-ms 500 --max-width 800 --loop 0
+giffer --input upload/album/
+giffer --input upload/a.jpg --input upload/b.png --output upload/out.gif
+giffer upload/img1.jpg upload/img2.jpg --output upload/out.gif
 ```
 
-| Flag          | Maps to     |
-|---------------|-------------|
-| `--input`     | `input`     |
-| `--output`    | `output`    |
-| `--delay-ms`  | `delay-ms`  |
-| `--max-width` | `max-width` |
-| `--loop`      | `loop`      |
+| Flag / args     | Maps to                  |
+|-----------------|--------------------------|
+| `--input`       | `input` (repeatable)     |
+| path arguments  | additional `input` paths |
+| `--output`      | `output`                 |
+| `--delay-ms`    | `delay-ms`               |
+| `--max-width`   | `max-width`              |
+| `--loop`        | `loop`                   |
 
-Omitting `--output` writes `<zip-basename>.gif` next to the input zip (typically under `upload/`). Omitting the tunable flags uses the defaults above.
+**Defaults when flags omitted:** one input → `<basename>.gif` beside it (dirs use the directory name). Multiple inputs → `animation.gif` in the cwd. Tunables fall back to the table above.
 
-### Success and failure (CLI)
+### ✅ / ❌ Success and failure (CLI)
 
-| Outcome              | Behavior                                  |
-|----------------------|-------------------------------------------|
-| Success              | Exit `0`; GIF written; path on stdout     |
-| Bad / unreadable zip | Exit `1`; message on stderr               |
-| No supported images  | Exit `1`; message on stderr               |
-| Invalid parameters   | Exit `2`; message on stderr               |
-| Write failure        | Exit `1`; message on stderr               |
+| Outcome                    | Behavior                              |
+|----------------------------|---------------------------------------|
+| ✅ Success                 | Exit `0`; GIF written; path on stdout |
+| 💥 Bad / unreadable input  | Exit `1`; message on stderr           |
+| 📭 No supported images     | Exit `1`; message on stderr           |
+| 🚫 Invalid parameters      | Exit `2`; message on stderr           |
+| 💾 Write failure           | Exit `1`; message on stderr           |
 
-### Non-goals (Phase 1)
+### 🚫 Non-goals (Phase 1)
+
+**TL;DR:** No UI, video, cloud, editing, advanced GIF knobs, FPS, crop modes, or custom sort.
+
+<details>
+<summary>📋 Full list</summary>
 
 - UI of any kind
 - Video input
@@ -93,32 +127,41 @@ Omitting `--output` writes `<zip-basename>.gif` next to the input zip (typically
 - Fit/crop modes, reverse playback, frame ranges, per-frame delays
 - EXIF-based or custom sort orders
 
+</details>
+
 ---
 
 ## Phase 2 — UI (optional)
 
-Build only if needed. Must not change Phase 1 behavior; call the same conversion core and parameters.
+**TL;DR:** Build only if needed. Same converter + params as Phase 1. Drop zone → knobs → Convert → GIF.
 
-### UI sketch
+### 🖼️ UI sketch
 
-- Zip drop zone or file picker (`input`); chosen zips are treated like files under `upload/`.
+- Drop zone or file/folder picker for one or more inputs (zips, images, directories).
 - Fields for `delay-ms`, `max-width`, and `loop` (pre-filled with Phase 1 defaults).
 - Output as download and/or path chooser (`output`).
 - One primary **Convert** action.
 - Progress while converting; clear error text on failure; success state with the resulting GIF available.
 
-### Success and failure (UI)
+### ✅ / ❌ Success and failure (UI)
 
-| Outcome              | Behavior                         |
-|----------------------|----------------------------------|
-| Success              | Success status + GIF ready       |
-| Bad / unreadable zip | Error message                    |
-| No supported images  | Error message                    |
-| Invalid parameters   | Inline validation errors         |
-| Write failure        | Error message                    |
+| Outcome                    | Behavior                     |
+|----------------------------|------------------------------|
+| ✅ Success                 | Success status + GIF ready   |
+| 💥 Bad / unreadable input  | Error message                |
+| 📭 No supported images     | Error message                |
+| 🚫 Invalid parameters      | Inline validation errors     |
+| 💾 Write failure           | Error message                |
 
-### Non-goals (Phase 2)
+### 🚫 Non-goals (Phase 2)
+
+**TL;DR:** No forked converter, cloud, or editing / advanced optimization UI.
+
+<details>
+<summary>📋 Full list</summary>
 
 - Replacing or forking the CLI converter
 - Cloud upload
 - Editing tools or advanced GIF optimization UI
+
+</details>
