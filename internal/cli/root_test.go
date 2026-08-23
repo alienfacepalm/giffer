@@ -24,6 +24,22 @@ func TestValidateOptionsDefaults(t *testing.T) {
 	}
 }
 
+func TestValidateOptionsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	album := filepath.Join(dir, "album")
+	if err := os.MkdirAll(album, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	opts, err := validateOptions(album, "", 500, 800, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(dir, "album.gif")
+	if opts.Output != want {
+		t.Fatalf("output=%q want %q", opts.Output, want)
+	}
+}
+
 func TestValidateOptionsRejects(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -94,17 +110,28 @@ func TestRunExitCodes(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid params", func(t *testing.T) {
+	t.Run("directory input", func(t *testing.T) {
+		album := filepath.Join(dir, "album")
+		if err := os.MkdirAll(album, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := writePNGFile(filepath.Join(album, "a.png"), 30, 15); err != nil {
+			t.Fatal(err)
+		}
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-		code := Run([]string{"--input", "nope.txt"}, stdout, stderr)
-		if code != exitInvalidParams {
-			t.Fatalf("code=%d want %d stderr=%s", code, exitInvalidParams, stderr.String())
+		code := Run([]string{"--input", album}, stdout, stderr)
+		if code != exitOK {
+			t.Fatalf("code=%d stderr=%s", code, stderr.String())
+		}
+		want := filepath.Join(dir, "album.gif")
+		if strings.TrimSpace(stdout.String()) != want {
+			t.Fatalf("stdout=%q want %q", stdout.String(), want)
 		}
 	})
 
-	t.Run("missing input flag", func(t *testing.T) {
+	t.Run("invalid params", func(t *testing.T) {
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-		code := Run(nil, stdout, stderr)
+		code := Run([]string{"--input", "nope.txt"}, stdout, stderr)
 		if code != exitInvalidParams {
 			t.Fatalf("code=%d want %d stderr=%s", code, exitInvalidParams, stderr.String())
 		}
@@ -122,6 +149,165 @@ func TestRunExitCodes(t *testing.T) {
 			t.Fatalf("stderr=%q", stderr.String())
 		}
 	})
+}
+
+func TestRunBatch(t *testing.T) {
+	root := t.TempDir()
+	upload := filepath.Join(root, "upload")
+	if err := os.MkdirAll(upload, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	zipPath := filepath.Join(upload, "photos.zip")
+	if err := writePNGZip(zipPath, "a.png", 40, 20); err != nil {
+		t.Fatal(err)
+	}
+
+	album := filepath.Join(upload, "vacation")
+	if err := os.MkdirAll(album, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(album, "b.png"), 40, 20); err != nil {
+		t.Fatal(err)
+	}
+
+	empty := filepath.Join(upload, "empty")
+	if err := os.MkdirAll(empty, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	existing := filepath.Join(upload, "done.gif")
+	if err := os.WriteFile(existing, []byte("gif"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	doneZip := filepath.Join(upload, "done.zip")
+	if err := writePNGZip(doneZip, "c.png", 20, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run(nil, stdout, stderr)
+	if code != exitOK {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+
+	out := stdout.String()
+	if !strings.Contains(out, "skip "+filepath.Join("upload", "done.gif")) {
+		t.Fatalf("expected skip for done.gif, got %q", out)
+	}
+	photosGIF := filepath.Join("upload", "photos.gif")
+	vacationGIF := filepath.Join("upload", "vacation.gif")
+	if !strings.Contains(out, photosGIF) {
+		t.Fatalf("expected created %s in %q", photosGIF, out)
+	}
+	if !strings.Contains(out, vacationGIF) {
+		t.Fatalf("expected created %s in %q", vacationGIF, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, photosGIF)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, vacationGIF)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Second run: everything skipped.
+	stdout2, stderr2 := &bytes.Buffer{}, &bytes.Buffer{}
+	code = Run(nil, stdout2, stderr2)
+	if code != exitOK {
+		t.Fatalf("second run code=%d stderr=%s", code, stderr2.String())
+	}
+	if !strings.Contains(stdout2.String(), "skip") {
+		t.Fatalf("expected skips on second run, got %q", stdout2.String())
+	}
+}
+
+func TestRunBatchEmptyUpload(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "upload"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run(nil, stdout, stderr)
+	if code != exitOK {
+		t.Fatalf("code=%d stderr=%s", code, stderr.String())
+	}
+}
+
+func TestRunBatchCollision(t *testing.T) {
+	root := t.TempDir()
+	upload := filepath.Join(root, "upload")
+	if err := os.MkdirAll(upload, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGZip(filepath.Join(upload, "photos.zip"), "a.png", 20, 10); err != nil {
+		t.Fatal(err)
+	}
+	album := filepath.Join(upload, "photos")
+	if err := os.MkdirAll(album, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(album, "b.png"), 20, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
+	code := Run(nil, stdout, stderr)
+	if code != exitRuntime {
+		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "output collision") {
+		t.Fatalf("stderr=%q", stderr.String())
+	}
+}
+
+func TestDiscoverUploadJobs(t *testing.T) {
+	dir := t.TempDir()
+	if err := writePNGZip(filepath.Join(dir, "a.zip"), "x.png", 10, 10); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(dir, "b")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePNGFile(filepath.Join(sub, "y.png"), 10, 10); err != nil {
+		t.Fatal(err)
+	}
+	jobs, err := discoverUploadJobs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(jobs) != 2 {
+		t.Fatalf("jobs=%d want 2", len(jobs))
+	}
 }
 
 func writePNGZip(path, name string, w, h int) error {
@@ -146,4 +332,19 @@ func writePNGZip(path, name string, w, h int) error {
 		return err
 	}
 	return zw.Close()
+}
+
+func writePNGFile(path string, w, h int) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.White)
+		}
+	}
+	return png.Encode(f, img)
 }

@@ -1,11 +1,12 @@
 ---
-description: Place input zip archives in the upload/ directory
+description: Place input zip archives and photo directories in the upload/ directory
 alwaysApply: true
 ---
 
-# Zip Inputs Live in `upload/`
+# Zip / Photo Inputs Live in `upload/`
 
-- Put photo zip archives in the project `upload/` directory.
-- CLI examples and docs should use paths like `upload/photos.zip`.
+- Put photo zip archives and photo directories in the project `upload/` directory.
+- CLI examples and docs should use paths like `upload/photos.zip` or `upload/vacation/`.
 - Do not leave loose input zips at the repo root.
-- Default GIF output (when `--output` is omitted) stays beside the zip under `upload/`.
+- Default GIF output (when `--output` is omitted) stays beside the input under `upload/`.
+- Bare `./giffer` batch-processes `upload/` and skips sources that already have a matching `.gif`.

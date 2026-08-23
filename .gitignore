@@ -20,3 +20,6 @@ coverage.html
 .vscode/
 *.swp
 *~
+
+# Cursor hook runtime logs
+.cursor/hooks/state/

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "node .cursor/hooks/plan-alignment-check.js --record-edit",
+        "timeout": 10
+      }
+    ],
+    "stop": [
+      {
+        "command": "node .cursor/hooks/plan-alignment-check.js --on-stop",
+        "timeout": 20,
+        "loop_limit": 1
+      }
+    ],
+    "subagentStop": [
+      {
+        "command": "node .cursor/hooks/plan-alignment-check.js --on-subagent-stop",
+        "timeout": 20,
+        "loop_limit": 1
+      }
+    ]
+  }
+}
