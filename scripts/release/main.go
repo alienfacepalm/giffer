@@ -1,5 +1,6 @@
 // Command release builds giffer binaries for Windows, Linux, and macOS.
 // Windows uses go-webview2 (no CGO). Linux and macOS use webview_go (CGO).
+// Release binaries are native GUI apps: double-click opens the convert UI.
 package main
 
 import (
@@ -8,9 +9,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/AlienFacepalm/giffer/internal/release/macosbundle"
 )
 
 func main() {
+	version := macosbundle.ReadVersion("README.md")
+
 	targets := []struct {
 		goos, goarch, dir, name string
 	}{
@@ -79,6 +84,15 @@ func main() {
 		if err := cmd.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: %s/%s: %v (skipped)\n", t.goos, t.goarch, err)
 			continue
+		}
+
+		if t.goos == "darwin" {
+			appPath := filepath.Join(dir, "Giffer.app")
+			if err := macosbundle.Bundle(out, appPath, version); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: bundle %s: %v\n", appPath, err)
+			} else {
+				fmt.Printf("bundled %s\n", appPath)
+			}
 		}
 	}
 }

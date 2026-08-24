@@ -29,9 +29,9 @@ func SetOpenWindowForTest(fn func(url string) error) {
 }
 
 // Run starts the UI on opts.Addr (never remaps to another port), opens a native
-// window (or the system browser without the desktop build tag), and blocks on
-// Serve. If the address is already in use, it kills the listener and takes
-// over that port — never remaps to a different one.
+// window (or the system browser without the desktop build tag) on the main
+// thread, and blocks until the window closes. If the address is already in use,
+// it kills the listener and takes over that port — never remaps to a different one.
 func Run(opts Options, stdout io.Writer) error {
 	if strings.TrimSpace(opts.UploadDir) == "" {
 		opts.UploadDir = DefaultUploadDir()
@@ -60,28 +60,52 @@ func Run(opts Options, stdout io.Writer) error {
 	fmt.Fprintf(stdout, "🚀 giffer ui listening on %s\n", url)
 	fmt.Fprintf(stdout, "📁 upload dir: %s\n", opts.UploadDir)
 
-	srv := New(opts)
-	srv.opts.Addr = ln.Addr().String()
-
-	go func() {
-		time.Sleep(150 * time.Millisecond)
-		_ = openWindowFunc(url)
-	}()
-
-	return srv.serve(ln)
-}
-
-func (s *Server) serve(ln net.Listener) error {
-	if err := os.MkdirAll(s.opts.UploadDir, 0o755); err != nil {
+	if err := os.MkdirAll(opts.UploadDir, 0o755); err != nil {
 		_ = ln.Close()
 		return fmt.Errorf("create upload dir: %w", err)
 	}
-	s.server = &http.Server{
-		Addr:              s.opts.Addr,
-		Handler:           s.mux,
+
+	srv := New(opts)
+	srv.opts.Addr = ln.Addr().String()
+	srv.server = &http.Server{
+		Addr:              srv.opts.Addr,
+		Handler:           srv.mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	return s.server.Serve(ln)
+
+	serveErr := make(chan error, 1)
+	go func() {
+		serveErr <- srv.server.Serve(ln)
+	}()
+
+	waitForServer(url)
+
+	// WebView2 (and other native webviews) require the platform message pump on
+	// the main thread — never call openWindowFunc from a goroutine.
+	windowErr := openWindowFunc(url)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.server.Shutdown(ctx)
+
+	err = <-serveErr
+	if windowErr != nil {
+		return windowErr
+	}
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+func waitForServer(url string) {
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if Probe(url) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 func httpURL(addr string) string {

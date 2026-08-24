@@ -60,11 +60,16 @@ func TestRunReclaimsExistingPort(t *testing.T) {
 	t.Cleanup(func() { ui.SetFreePortForTest(nil) })
 
 	opened := make(chan string, 1)
+	blockWindow := make(chan struct{})
 	ui.SetOpenWindowForTest(func(u string) error {
 		opened <- u
+		<-blockWindow
 		return nil
 	})
-	t.Cleanup(func() { ui.SetOpenWindowForTest(nil) })
+	t.Cleanup(func() {
+		close(blockWindow)
+		ui.SetOpenWindowForTest(nil)
+	})
 
 	var out syncBuffer
 	done := make(chan error, 1)
@@ -117,11 +122,16 @@ func TestRunOpensWindowOnListen(t *testing.T) {
 	_ = ln.Close()
 
 	opened := make(chan string, 1)
+	blockWindow := make(chan struct{})
 	ui.SetOpenWindowForTest(func(u string) error {
 		opened <- u
+		<-blockWindow
 		return nil
 	})
-	t.Cleanup(func() { ui.SetOpenWindowForTest(nil) })
+	t.Cleanup(func() {
+		close(blockWindow)
+		ui.SetOpenWindowForTest(nil)
+	})
 
 	done := make(chan error, 1)
 	go func() {

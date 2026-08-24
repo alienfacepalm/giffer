@@ -1,19 +1,21 @@
 # giffer downloads
 
-Binaries with an embedded webview for the convert UI. Pick your platform folder, download the binary, and run it.
+Native GUI apps with an embedded webview for the convert UI. Pick your platform folder, download, and double-click to run.
 
-| Folder | OS / CPU | Binary |
-|--------|----------|--------|
-| [`windows-amd64/`](windows-amd64/) | Windows x64 | `giffer.exe` |
-| [`windows-386/`](windows-386/) | Windows x86 (32-bit) | `giffer.exe` |
-| [`linux-amd64/`](linux-amd64/) | Linux x64 | `giffer` |
-| [`linux-arm64/`](linux-arm64/) | Linux ARM64 | `giffer` |
-| [`darwin-amd64/`](darwin-amd64/) | macOS Intel | `giffer` |
-| [`darwin-arm64/`](darwin-arm64/) | macOS Apple Silicon | `giffer` |
+| Folder | OS / CPU | Double-click | Terminal |
+|--------|----------|--------------|----------|
+| [`windows-amd64/`](windows-amd64/) | Windows x64 | `giffer.exe` | `giffer.exe ui` |
+| [`windows-386/`](windows-386/) | Windows x86 (32-bit) | `giffer.exe` | `giffer.exe ui` |
+| [`linux-amd64/`](linux-amd64/) | Linux x64 | `giffer` | `./giffer ui` |
+| [`linux-arm64/`](linux-arm64/) | Linux ARM64 | `giffer` | `./giffer ui` |
+| [`darwin-amd64/`](darwin-amd64/) | macOS Intel | `Giffer.app` | `./giffer ui` |
+| [`darwin-arm64/`](darwin-arm64/) | macOS Apple Silicon | `Giffer.app` | `./giffer ui` |
 
 ## Quick start
 
-**Double-click** `giffer` / `giffer.exe` to open the convert UI in a native window.
+**Windows:** double-click `giffer.exe`.
+
+**macOS:** double-click `Giffer.app` (bare `giffer` binary also included for terminal use).
 
 **Linux / macOS (terminal)**
 

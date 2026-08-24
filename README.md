@@ -2,22 +2,22 @@
 
 Turn a **series of photos** (archive or folder) into an animated GIF.
 
-**Release:** v1.1.0 — Windows, Linux, and macOS.
+**Release:** v1.1.1 — Windows, Linux, and macOS.
 
 ## Download
 
 Prebuilt binaries live under [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release) (one directory per platform) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
 
-| Platform | Path |
-|----------|------|
-| Windows (x64) | [`windows-amd64/giffer.exe`](release/windows-amd64/giffer.exe) |
-| Windows (x86) | [`windows-386/giffer.exe`](release/windows-386/giffer.exe) |
-| Linux (x64) | [`linux-amd64/giffer`](release/linux-amd64/giffer) |
-| Linux (ARM64) | [`linux-arm64/giffer`](release/linux-arm64/giffer) |
-| macOS (Intel) | [`darwin-amd64/giffer`](release/darwin-amd64/giffer) |
-| macOS (Apple Silicon) | [`darwin-arm64/giffer`](release/darwin-arm64/giffer) |
+| Platform | Path | Double-click |
+|----------|------|--------------|
+| Windows (x64) | [`windows-amd64/giffer.exe`](release/windows-amd64/giffer.exe) | `giffer.exe` |
+| Windows (x86) | [`windows-386/giffer.exe`](release/windows-386/giffer.exe) | `giffer.exe` |
+| Linux (x64) | [`linux-amd64/giffer`](release/linux-amd64/giffer) | `giffer` (`chmod +x` first) |
+| Linux (ARM64) | [`linux-arm64/giffer`](release/linux-arm64/giffer) | `giffer` (`chmod +x` first) |
+| macOS (Intel) | [`darwin-amd64/Giffer.app`](release/darwin-amd64/Giffer.app) | `Giffer.app` |
+| macOS (Apple Silicon) | [`darwin-arm64/Giffer.app`](release/darwin-arm64/Giffer.app) | `Giffer.app` |
 
-Double-click the binary to open the convert UI in a native window. From a terminal, `./giffer` opens the interactive wizard; `./giffer ui` always opens the UI window.
+Each release build is a **native GUI app** with an embedded webview. Double-click opens the convert UI in its own window — no terminal, no browser tab. CLI flags and `giffer ui` still work from a terminal.
 
 ```bash
 # Linux / macOS
@@ -80,10 +80,16 @@ All UI assets (including fonts and Three.js) are embedded in the binary. Drop a 
 ## Build
 
 ```bash
-make build          # local binary → bin/giffer (desktop webview)
+make build          # local dev binary → bin/giffer (console on Windows)
+make build-gui      # release-style GUI binary → bin/giffer (double-click test)
 make release        # all platforms → release/
 ```
 
-Release builds use the `desktop` tag. Windows uses go-webview2 (no CGO). Linux and macOS use webview_go (CGO; Linux build needs `libwebkit2gtk-4.1-dev`).
+Release builds use the `desktop` tag and ship as native GUI apps:
+- **Windows:** `giffer.exe` with `-H=windowsgui` (no console flash on double-click)
+- **macOS:** `Giffer.app` bundle plus bare `giffer` for terminal use
+- **Linux:** executable `giffer` (file manager double-click after `chmod +x`)
+
+Windows uses go-webview2 (no CGO). Linux and macOS use webview_go (CGO; Linux build needs `libwebkit2gtk-4.1-dev`).
 
 Tagged releases (`v*`) are built and uploaded by GitHub Actions — see `.github/workflows/release.yml`.

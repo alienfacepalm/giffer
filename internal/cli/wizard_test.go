@@ -118,8 +118,28 @@ func TestNoUserParams(t *testing.T) {
 	}
 }
 
-func TestIsTerminalNonFile(t *testing.T) {
-	if isTerminal(strings.NewReader("")) {
-		t.Fatal("non-file reader must not look like a terminal")
+func TestShouldLaunchDesktopNonFile(t *testing.T) {
+	if shouldLaunchDesktop(strings.NewReader(""), &bytes.Buffer{}) {
+		t.Fatal("non-file streams must not launch desktop UI")
+	}
+}
+
+func TestShouldLaunchDesktopPipe(t *testing.T) {
+	inR, inW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inR.Close()
+	defer inW.Close()
+
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outR.Close()
+	defer outW.Close()
+
+	if !shouldLaunchDesktop(inR, outW) {
+		t.Fatal("non-TTY file streams should launch desktop UI (double-click path)")
 	}
 }
