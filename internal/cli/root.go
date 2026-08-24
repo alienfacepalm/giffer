@@ -24,23 +24,26 @@ const (
 
 // Execute runs the root command with process args and returns an exit code.
 func Execute() int {
-	return Run(os.Args[1:], os.Stdout, os.Stderr)
+	return Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 }
 
 // Run executes giffer with the given args and I/O streams (for tests).
-func Run(args []string, stdout, stderr io.Writer) int {
+// Pass a non-terminal stdin (for example bytes.NewReader(nil)) to skip the
+// interactive wizard when no flags are set.
+func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd := newRootCmd()
 	cmd.SetArgs(args)
+	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
 
 	if err := cmd.Execute(); err != nil {
 		var inv *invalidParamsError
 		if errors.As(err, &inv) {
-			fmt.Fprintln(stderr, inv.Error())
+			fmt.Fprintln(stderr, fancyError(stderr, inv.Error()))
 			return exitInvalidParams
 		}
-		fmt.Fprintln(stderr, err.Error())
+		fmt.Fprintln(stderr, fancyError(stderr, convert.UserMessage(err)))
 		return exitRuntime
 	}
 	return exitOK
@@ -63,11 +66,15 @@ func newRootCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:           "giffer",
-		Short:         "Convert zips or photo directories into animated GIFs",
+		Short:         "🎞️  Convert photo archives or directories into animated GIFs",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if noUserParams(cmd) && isTerminal(cmd.InOrStdin()) {
+				return runWizard(cmd, cmd.InOrStdin(), cmd.OutOrStdout())
+			}
+
 			if err := validateTunables(delayMS, maxWidth, loop); err != nil {
 				return err
 			}
@@ -82,24 +89,28 @@ func newRootCmd() *cobra.Command {
 			}
 
 			if _, err := os.Stat(opts.Output); err == nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: overwriting %s\n", opts.Output)
+				printOverwriteWarning(cmd.ErrOrStderr(), opts.Output)
 			} else if !errors.Is(err, os.ErrNotExist) {
 				return fmt.Errorf("check output path: %w", err)
 			}
 
+			prog := newProgress(cmd.ErrOrStderr(), filepath.Base(opts.Input))
+			opts.OnProgress = prog.handler()
 			if err := convert.Convert(opts); err != nil {
+				prog.finish(false)
 				return err
 			}
+			prog.finish(true)
 
-			fmt.Fprintln(cmd.OutOrStdout(), opts.Output)
+			printDone(cmd.OutOrStdout(), opts.Output)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&input, "input", "", "path to input .zip or photo directory (omit to process all of upload/)")
+	cmd.Flags().StringVar(&input, "input", "", "path to photo archive or directory (omit for batch, or run with no flags for the wizard)")
 	cmd.Flags().StringVar(&output, "output", "", "destination .gif path (default: beside the input)")
-	cmd.Flags().IntVar(&delayMS, "delay-ms", 500, "milliseconds each frame is shown")
-	cmd.Flags().IntVar(&maxWidth, "max-width", 800, "max frame width in px; height scales to preserve aspect")
+	cmd.Flags().IntVar(&delayMS, "delay-ms", 100, "milliseconds each frame is shown (GIF-safe default; stored in 10ms units)")
+	cmd.Flags().IntVar(&maxWidth, "max-width", 0, "max frame width in px; 0 = first photo width")
 	cmd.Flags().IntVar(&loop, "loop", 0, "GIF loop count; 0 means loop forever")
 
 	cmd.AddCommand(newUICmd())
@@ -120,10 +131,12 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 	var toRun []batchJob
 	stdout := cmd.OutOrStdout()
 	stderr := cmd.ErrOrStderr()
+	skipped := 0
 
 	for _, j := range jobs {
 		if _, err := os.Stat(j.Output); err == nil {
-			fmt.Fprintf(stdout, "skip %s\n", j.Output)
+			printSkip(stdout, j.Output)
+			skipped++
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("check output path %s: %w", j.Output, err)
@@ -131,7 +144,10 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 		toRun = append(toRun, j)
 	}
 
+	printBatchHeader(stderr, len(toRun), skipped)
+
 	if len(toRun) == 0 {
+		printBatchSummary(stderr, 0, 0, skipped)
 		return nil
 	}
 
@@ -142,7 +158,7 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 	sem := make(chan struct{}, workers)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var failed int
+	var failed, okCount int
 
 	for _, j := range toRun {
 		wg.Add(1)
@@ -162,13 +178,16 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 			defer mu.Unlock()
 			if err != nil {
 				failed++
-				fmt.Fprintf(stderr, "%s: %v\n", j.Input, err)
+				fmt.Fprintf(stderr, "%s %s: %s\n", newStyle(stderr).red("❌"), j.Input, convert.UserMessage(err))
 				return
 			}
-			fmt.Fprintln(stdout, j.Output)
+			okCount++
+			printDone(stdout, j.Output)
 		}(j)
 	}
 	wg.Wait()
+
+	printBatchSummary(stderr, okCount, failed, skipped)
 
 	if failed > 0 {
 		return fmt.Errorf("%d conversion(s) failed", failed)
@@ -202,15 +221,14 @@ func discoverUploadJobs(uploadDir string) ([]batchJob, error) {
 			continue
 		}
 		full := filepath.Join(uploadDir, name)
-		ext := filepath.Ext(name)
 
-		if strings.EqualFold(ext, ".gif") {
+		if strings.EqualFold(filepath.Ext(name), ".gif") {
 			continue
 		}
 
-		if strings.EqualFold(ext, ".zip") {
-			base := strings.TrimSuffix(name, ext)
-			addJob(full, filepath.Join(uploadDir, base+".gif"))
+		if convert.IsArchive(name) {
+			stem := convert.ArchiveStem(name)
+			addJob(full, filepath.Join(uploadDir, stem+".gif"))
 			continue
 		}
 
@@ -233,8 +251,8 @@ func validateTunables(delayMS, maxWidth, loop int) error {
 	if delayMS <= 0 {
 		return &invalidParamsError{msg: "--delay-ms must be an integer > 0"}
 	}
-	if maxWidth < 1 {
-		return &invalidParamsError{msg: "--max-width must be an integer >= 1"}
+	if maxWidth < 0 {
+		return &invalidParamsError{msg: "--max-width must be an integer >= 0"}
 	}
 	if loop < 0 {
 		return &invalidParamsError{msg: "--loop must be an integer >= 0"}
@@ -254,22 +272,24 @@ func validateSingleOptions(input, output string, delayMS, maxWidth, loop int) (c
 
 	info, err := os.Stat(in)
 	if err != nil {
-		if strings.EqualFold(filepath.Ext(in), ".zip") {
-			// Let Convert surface unreadable zip; still validate shape.
+		if convert.IsArchive(in) {
+			// Let Convert surface unreadable archive; still validate shape.
 		} else if errors.Is(err, os.ErrNotExist) {
-			return convert.Options{}, &invalidParamsError{msg: "--input must be a .zip file or an existing directory"}
+			return convert.Options{}, &invalidParamsError{msg: "--input must be a photo archive or an existing directory"}
 		} else {
 			return convert.Options{}, fmt.Errorf("check input path: %w", err)
 		}
 	} else if info.IsDir() {
 		// directory input OK
-	} else if !strings.EqualFold(filepath.Ext(in), ".zip") {
-		return convert.Options{}, &invalidParamsError{msg: "--input must be a .zip file or an existing directory"}
+	} else if !convert.IsArchive(in) {
+		return convert.Options{}, &invalidParamsError{
+			msg: "--input must be a photo archive (" + strings.Join(convert.ArchiveKinds, ", ") + ") or an existing directory",
+		}
 	}
 
 	out := strings.TrimSpace(output)
 	if out == "" {
-		base := strings.TrimSuffix(filepath.Base(in), filepath.Ext(in))
+		base := convert.ArchiveStem(in)
 		if info != nil && info.IsDir() {
 			base = filepath.Base(in)
 		}

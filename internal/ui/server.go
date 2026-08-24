@@ -28,10 +28,10 @@ type Server struct {
 	server *http.Server
 }
 
-// New builds a UI server. UploadDir defaults to "upload".
+// New builds a UI server. UploadDir defaults to DefaultUploadDir().
 func New(opts Options) *Server {
 	if strings.TrimSpace(opts.UploadDir) == "" {
-		opts.UploadDir = "upload"
+		opts.UploadDir = DefaultUploadDir()
 	}
 	if strings.TrimSpace(opts.Addr) == "" {
 		opts.Addr = "127.0.0.1:8765"
@@ -45,6 +45,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /{$}", s.handleIndex)
 	s.mux.HandleFunc("GET /app.css", s.handleCSS)
 	s.mux.HandleFunc("GET /app.js", s.handleJS)
+	s.mux.HandleFunc("GET /forge.js", s.handleForge)
+	s.mux.HandleFunc("GET /three.min.js", s.handleThree)
+	s.mux.HandleFunc("GET /afp-mark.png", s.handleMark)
+	s.mux.HandleFunc("GET /fonts/{name}", s.handleFont)
 	s.mux.HandleFunc("POST /api/convert", s.handleConvert)
 	s.mux.HandleFunc("GET /api/gif/{name}", s.handleGIF)
 }
@@ -74,7 +78,12 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Addr() string { return s.opts.Addr }
 
 type convertResponse struct {
-	OK     bool   `json:"ok"`
+	OK     bool   `json:"ok,omitempty"`
+	Type   string `json:"type,omitempty"` // "progress" | "done" | "error" (NDJSON stream)
+	Stage  string `json:"stage,omitempty"`
+	Done   int    `json:"done,omitempty"`
+	Total  int    `json:"total,omitempty"`
+	Pct    int    `json:"percent,omitempty"`
 	Output string `json:"output,omitempty"`
 	URL    string `json:"url,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -82,6 +91,7 @@ type convertResponse struct {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(gifferHeader, "1")
 	_, _ = w.Write(indexHTML)
 }
 
@@ -95,22 +105,59 @@ func (s *Server) handleJS(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(appJS)
 }
 
+func (s *Server) handleForge(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	_, _ = w.Write(forgeJS)
+}
+
+func (s *Server) handleThree(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(threeJS)
+}
+
+func (s *Server) handleMark(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	_, _ = w.Write(afpMarkPNG)
+}
+
+func (s *Server) handleFont(w http.ResponseWriter, r *http.Request) {
+	name := filepath.Base(r.PathValue("name"))
+	if name == "." || name == "" || strings.Contains(name, "..") || !strings.HasSuffix(name, ".woff2") {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := fontFS.ReadFile("static/fonts/" + name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "font/woff2")
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	_, _ = w.Write(data)
+}
+
 func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 	const maxUpload = 512 << 20 // 512 MiB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
-		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "invalid upload: " + err.Error()})
+		msg := "Upload failed. Use a photo archive under 512 MB and try again."
+		if strings.Contains(strings.ToLower(err.Error()), "too large") || strings.Contains(err.Error(), "MaxBytesReader") {
+			msg = "Archive is too large (max 512 MB). Zip fewer or smaller photos and try again."
+		}
+		writeJSON(w, http.StatusBadRequest, convertResponse{Error: msg})
 		return
 	}
 
-	delayMS, err := atoiDefault(r.FormValue("delay-ms"), 500)
+	delayMS, err := atoiDefault(r.FormValue("delay-ms"), 100)
 	if err != nil || delayMS <= 0 {
 		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "delay-ms must be an integer > 0"})
 		return
 	}
-	maxWidth, err := atoiDefault(r.FormValue("max-width"), 800)
-	if err != nil || maxWidth < 1 {
-		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "max-width must be an integer >= 1"})
+	maxWidth, err := atoiDefault(r.FormValue("max-width"), 0)
+	if err != nil || maxWidth < 0 {
+		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "max-width must be an integer >= 0"})
 		return
 	}
 	loop, err := atoiDefault(r.FormValue("loop"), 0)
@@ -121,14 +168,18 @@ func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 
 	file, hdr, err := r.FormFile("file")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "file is required (zip)"})
+		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "file is required (photo archive)"})
 		return
 	}
 	defer file.Close()
 
 	base := filepath.Base(hdr.Filename)
-	if !strings.EqualFold(filepath.Ext(base), ".zip") {
-		writeJSON(w, http.StatusBadRequest, convertResponse{Error: "file must be a .zip archive"})
+	if !convert.IsArchive(base) {
+		writeJSON(w, http.StatusBadRequest, convertResponse{
+			Error: "That file is not a photo archive. Upload a zip/tar/7z of photos (" +
+				convert.ImageKindsHelp + " images), not a single photo, audio, or other file. Supported archives: " +
+				strings.Join(convert.ArchiveKinds, ", "),
+		})
 		return
 	}
 	safe := sanitizeBase(base)
@@ -142,41 +193,71 @@ func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	zipPath := filepath.Join(s.opts.UploadDir, safe)
-	outPath := filepath.Join(s.opts.UploadDir, strings.TrimSuffix(safe, filepath.Ext(safe))+".gif")
+	archivePath := filepath.Join(s.opts.UploadDir, safe)
+	outPath := filepath.Join(s.opts.UploadDir, convert.ArchiveStem(safe)+".gif")
 
-	dst, err := os.Create(zipPath)
+	dst, err := os.Create(archivePath)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save zip: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save archive: " + err.Error()})
 		return
 	}
 	if _, err := io.Copy(dst, file); err != nil {
 		dst.Close()
-		_ = os.Remove(zipPath)
-		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save zip: " + err.Error()})
+		_ = os.Remove(archivePath)
+		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save archive: " + err.Error()})
 		return
 	}
 	if err := dst.Close(); err != nil {
-		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save zip: " + err.Error()})
+		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "save archive: " + err.Error()})
 		return
 	}
 
-	if err := convert.Convert(convert.Options{
-		Input:    zipPath,
+	if err := convert.CheckPhotoSource(archivePath); err != nil {
+		_ = os.Remove(archivePath)
+		writeJSON(w, http.StatusBadRequest, convertResponse{Error: convert.UserMessage(err)})
+		return
+	}
+
+	flusher, canFlush := w.(http.Flusher)
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	emit := func(ev convertResponse) {
+		_ = json.NewEncoder(w).Encode(ev)
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+
+	err = convert.Convert(convert.Options{
+		Input:    archivePath,
 		Output:   outPath,
 		DelayMS:  delayMS,
 		MaxWidth: maxWidth,
 		Loop:     loop,
-	}); err != nil {
-		writeJSON(w, http.StatusBadRequest, convertResponse{Error: err.Error()})
+		OnProgress: func(p convert.Progress) {
+			emit(convertResponse{
+				Type:  "progress",
+				Stage: p.Stage,
+				Done:  p.Done,
+				Total: p.Total,
+				Pct:   p.Percent,
+			})
+		},
+	})
+	if err != nil {
+		emit(convertResponse{Type: "error", Error: convert.UserMessage(err)})
 		return
 	}
 
 	name := filepath.Base(outPath)
-	writeJSON(w, http.StatusOK, convertResponse{
+	emit(convertResponse{
+		Type:   "done",
 		OK:     true,
 		Output: outPath,
 		URL:    "/api/gif/" + name,
+		Pct:    100,
 	})
 }
 

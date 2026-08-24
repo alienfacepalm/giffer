@@ -53,7 +53,7 @@ func TestValidateOptionsRejects(t *testing.T) {
 		{"empty input", "", "", 500, 800, 0},
 		{"not zip", "upload/a.txt", "", 500, 800, 0},
 		{"delay", "upload/a.zip", "", 0, 800, 0},
-		{"width", "upload/a.zip", "", 500, 0, 0},
+		{"width", "upload/a.zip", "", 500, -1, 0},
 		{"loop", "upload/a.zip", "", 500, 800, -1},
 		{"output ext", "upload/a.zip", "out.png", 500, 800, 0},
 	}
@@ -84,7 +84,7 @@ func TestRunExitCodes(t *testing.T) {
 			"--delay-ms", "500",
 			"--max-width", "800",
 			"--loop", "0",
-		}, stdout, stderr)
+		}, strings.NewReader(""), stdout, stderr)
 		if code != exitOK {
 			t.Fatalf("code=%d stderr=%s", code, stderr.String())
 		}
@@ -102,7 +102,7 @@ func TestRunExitCodes(t *testing.T) {
 		code := Run([]string{
 			"--input", zipPath,
 			"--output", outPath,
-		}, stdout, stderr)
+		}, strings.NewReader(""), stdout, stderr)
 		if code != exitOK {
 			t.Fatalf("code=%d stderr=%s", code, stderr.String())
 		}
@@ -120,7 +120,7 @@ func TestRunExitCodes(t *testing.T) {
 			t.Fatal(err)
 		}
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-		code := Run([]string{"--input", album}, stdout, stderr)
+		code := Run([]string{"--input", album}, strings.NewReader(""), stdout, stderr)
 		if code != exitOK {
 			t.Fatalf("code=%d stderr=%s", code, stderr.String())
 		}
@@ -132,7 +132,7 @@ func TestRunExitCodes(t *testing.T) {
 
 	t.Run("invalid params", func(t *testing.T) {
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-		code := Run([]string{"--input", "nope.txt"}, stdout, stderr)
+		code := Run([]string{"--input", "nope.txt"}, strings.NewReader(""), stdout, stderr)
 		if code != exitInvalidParams {
 			t.Fatalf("code=%d want %d stderr=%s", code, exitInvalidParams, stderr.String())
 		}
@@ -142,11 +142,11 @@ func TestRunExitCodes(t *testing.T) {
 		stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
 		code := Run([]string{
 			"--input", filepath.Join(dir, "missing.zip"),
-		}, stdout, stderr)
+		}, strings.NewReader(""), stdout, stderr)
 		if code != exitRuntime {
 			t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
 		}
-		if !strings.Contains(stderr.String(), "unreadable zip") {
+		if !strings.Contains(stderr.String(), "unreadable archive") {
 			t.Fatalf("stderr=%q", stderr.String())
 		}
 	})
@@ -198,7 +198,7 @@ func TestRunBatch(t *testing.T) {
 	})
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(nil, stdout, stderr)
+	code := Run(nil, strings.NewReader(""), stdout, stderr)
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
@@ -224,7 +224,7 @@ func TestRunBatch(t *testing.T) {
 
 	// Second run: everything skipped.
 	stdout2, stderr2 := &bytes.Buffer{}, &bytes.Buffer{}
-	code = Run(nil, stdout2, stderr2)
+	code = Run(nil, strings.NewReader(""), stdout2, stderr2)
 	if code != exitOK {
 		t.Fatalf("second run code=%d stderr=%s", code, stderr2.String())
 	}
@@ -248,7 +248,7 @@ func TestRunBatchEmptyUpload(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(nil, stdout, stderr)
+	code := Run(nil, strings.NewReader(""), stdout, stderr)
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
@@ -266,7 +266,7 @@ func TestRunBatchMissingUpload(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(nil, stdout, stderr)
+	code := Run(nil, strings.NewReader(""), stdout, stderr)
 	if code != exitRuntime {
 		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
 	}
@@ -298,7 +298,7 @@ func TestRunBatchPartialFailure(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(nil, stdout, stderr)
+	code := Run(nil, strings.NewReader(""), stdout, stderr)
 	if code != exitRuntime {
 		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
 	}
@@ -357,7 +357,7 @@ func TestRunBatchTunables(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run([]string{"--delay-ms", "200", "--max-width", "50", "--loop", "3"}, stdout, stderr)
+	code := Run([]string{"--delay-ms", "200", "--max-width", "50", "--loop", "3"}, strings.NewReader(""), stdout, stderr)
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
@@ -412,7 +412,7 @@ func TestRunBatchCollision(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run(nil, stdout, stderr)
+	code := Run(nil, strings.NewReader(""), stdout, stderr)
 	if code != exitRuntime {
 		t.Fatalf("code=%d want %d stderr=%s", code, exitRuntime, stderr.String())
 	}
@@ -423,7 +423,7 @@ func TestRunBatchCollision(t *testing.T) {
 
 func TestRunUIHelp(t *testing.T) {
 	stdout, stderr := &bytes.Buffer{}, &bytes.Buffer{}
-	code := Run([]string{"ui", "--help"}, stdout, stderr)
+	code := Run([]string{"ui", "--help"}, strings.NewReader(""), stdout, stderr)
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}

@@ -2,6 +2,7 @@ package convert
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"image"
 	"image/color/palette"
@@ -23,53 +24,93 @@ import (
 
 // Options controls a conversion run from a zip or photo directory.
 type Options struct {
-	Input    string
-	Output   string
-	DelayMS  int
-	MaxWidth int
-	Loop     int
+	Input      string
+	Output     string
+	DelayMS    int
+	MaxWidth   int // 0 = use first sorted frame's native width
+	Loop       int
+	OnProgress func(Progress) // optional; called as work advances
 }
 
-// Convert reads images from a zip archive or directory and writes an animated GIF.
+// Progress is a conversion status update for UI / logging.
+type Progress struct {
+	Stage   string // "reading", "encoding", "writing"
+	Done    int
+	Total   int
+	Percent int // overall 0–100 across stages
+}
+
+func report(opts Options, stage string, done, total int) {
+	if opts.OnProgress == nil || total < 1 {
+		return
+	}
+	if done < 0 {
+		done = 0
+	}
+	if done > total {
+		done = total
+	}
+	opts.OnProgress(Progress{
+		Stage:   stage,
+		Done:    done,
+		Total:   total,
+		Percent: overallPercent(stage, done, total),
+	})
+}
+
+func overallPercent(stage string, done, total int) int {
+	frac := float64(done) / float64(total)
+	switch stage {
+	case "reading":
+		return int(frac * 45)
+	case "encoding":
+		return 45 + int(frac*50)
+	case "writing":
+		return 95 + int(frac*5)
+	default:
+		return int(frac * 100)
+	}
+}
+
+// Convert reads images from a supported archive or directory and writes an animated GIF.
 func Convert(opts Options) error {
 	info, err := os.Stat(opts.Input)
 	if err != nil {
-		if strings.EqualFold(filepath.Ext(opts.Input), ".zip") {
-			return fmt.Errorf("unreadable zip: %w", err)
+		if IsArchive(opts.Input) {
+			return fmt.Errorf("unreadable archive: %w", err)
 		}
 		return fmt.Errorf("unreadable input: %w", err)
 	}
 	if info.IsDir() {
 		return DirToGIF(opts)
 	}
-	return ZipToGIF(opts)
+	if IsArchive(opts.Input) {
+		return ArchiveToGIF(opts)
+	}
+	return fmt.Errorf("unsupported input %q (want a photo directory or archive: %s)",
+		filepath.Base(opts.Input), strings.Join(ArchiveKinds, ", "))
 }
 
 // ZipToGIF reads images from a zip archive and writes an animated GIF.
 func ZipToGIF(opts Options) error {
 	zr, err := zip.OpenReader(opts.Input)
 	if err != nil {
-		return fmt.Errorf("unreadable zip: %w", err)
+		return fmt.Errorf("unreadable zip: %w - re-zip your photos as a standard .zip and try again", err)
 	}
 	defer zr.Close()
 
 	entries := collectZipImageEntries(zr.File)
 	if len(entries) == 0 {
-		return fmt.Errorf("no supported images found in zip")
+		return noImagesError("zip", summarizeZipNames(zr.File))
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
 		return strings.ToLower(entries[i].base) < strings.ToLower(entries[j].base)
 	})
 
-	frames := make([]image.Image, 0, len(entries))
-	for _, e := range entries {
-		img, err := decodeZipImage(e.file)
-		if err != nil {
-			continue // skip unreadable frames; require at least one usable frame below
-		}
-		frames = append(frames, img)
-	}
+	frames := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
+		return decodeZipImage(entries[i].file)
+	})
 	return writeGIF(opts, frames)
 }
 
@@ -80,21 +121,20 @@ func DirToGIF(opts Options) error {
 		return err
 	}
 	if len(entries) == 0 {
-		return fmt.Errorf("no supported images found in directory")
+		st, stErr := summarizeDir(opts.Input)
+		if stErr != nil {
+			return stErr
+		}
+		return noImagesError("folder", st)
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
 		return strings.ToLower(entries[i].base) < strings.ToLower(entries[j].base)
 	})
 
-	frames := make([]image.Image, 0, len(entries))
-	for _, e := range entries {
-		img, err := decodeFileImage(e.path)
-		if err != nil {
-			continue
-		}
-		frames = append(frames, img)
-	}
+	frames := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
+		return decodeFileImage(entries[i].path)
+	})
 	return writeGIF(opts, frames)
 }
 
@@ -106,7 +146,7 @@ func HasImages(dir string) bool {
 
 func writeGIF(opts Options, frames []image.Image) error {
 	if len(frames) == 0 {
-		return fmt.Errorf("no usable image frames")
+		return fmt.Errorf("no usable image frames: files looked like photos but could not be decoded - use real %s images and try again", imageKindsHelp)
 	}
 
 	delayCS := (opts.DelayMS + 5) / 10 // GIF delay is in 100ths of a second
@@ -114,28 +154,82 @@ func writeGIF(opts Options, frames []image.Image) error {
 		delayCS = 1
 	}
 
-	out := &gif.GIF{LoopCount: opts.Loop}
-	for _, img := range frames {
-		resized := resizeMaxWidth(img, opts.MaxWidth)
-		paletted := quantize(resized)
-		out.Image = append(out.Image, paletted)
-		out.Delay = append(out.Delay, delayCS)
+	maxWidth := opts.MaxWidth
+	if maxWidth == 0 {
+		// 0 = use the first sorted frame's native width as the baseline.
+		maxWidth = frames[0].Bounds().Dx()
+		if maxWidth < 1 {
+			maxWidth = 1
+		}
+	}
+
+	paletted := encodeFramesParallel(opts, frames, maxWidth)
+	delays := make([]int, len(paletted))
+	for i := range delays {
+		delays[i] = delayCS
+	}
+	screenW, screenH := gifScreenSize(paletted)
+	out := &gif.GIF{
+		Image:     paletted,
+		Delay:     delays,
+		LoopCount: opts.Loop,
+		// Logical screen must cover every frame; EncodeAll defaults to the
+		// first frame only, which fails when later photos are taller/wider.
+		Config: image.Config{Width: screenW, Height: screenH},
 	}
 
 	if err := os.MkdirAll(filepath.Dir(opts.Output), 0o755); err != nil {
-		return fmt.Errorf("create output directory: %w", err)
+		return fmt.Errorf("could not create output folder for %q: %w - pick a writable --output path and try again", opts.Output, err)
 	}
 
+	report(opts, "writing", 0, 1)
 	f, err := os.Create(opts.Output)
 	if err != nil {
-		return fmt.Errorf("write gif: %w", err)
+		return fmt.Errorf("could not write %q: %w - free disk space or pick another --output path and try again", opts.Output, err)
 	}
 	defer f.Close()
 
 	if err := gif.EncodeAll(f, out); err != nil {
-		return fmt.Errorf("encode gif: %w", err)
+		return encodeGIFError(err)
 	}
+	report(opts, "writing", 1, 1)
 	return nil
+}
+
+// gifScreenSize returns a logical screen large enough for every frame.
+func gifScreenSize(frames []*image.Paletted) (w, h int) {
+	for _, p := range frames {
+		if p == nil {
+			continue
+		}
+		b := p.Bounds()
+		if b.Max.X > w {
+			w = b.Max.X
+		}
+		if b.Max.Y > h {
+			h = b.Max.Y
+		}
+	}
+	if w < 1 {
+		w = 1
+	}
+	if h < 1 {
+		h = 1
+	}
+	return w, h
+}
+
+// encodeGIFError turns low-level gif package errors into actionable guidance.
+func encodeGIFError(err error) error {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "out of bounds"):
+		return fmt.Errorf("could not encode GIF: photo sizes do not fit one canvas - set --max-width to a shared size (e.g. 800) and try again")
+	case strings.Contains(msg, "too large"):
+		return fmt.Errorf("photos are too large for GIF (each side must be under 65536px) - lower --max-width and try again")
+	default:
+		return fmt.Errorf("could not encode GIF (%v) - try a smaller --max-width or fewer photos, then try again", err)
+	}
 }
 
 type zipImage struct {
@@ -250,11 +344,15 @@ func decodeFileImage(path string) (image.Image, error) {
 }
 
 func decodeImage(r io.Reader) (image.Image, error) {
-	img, _, err := image.Decode(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
-	return img, nil
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	return applyEXIFOrientation(img, data), nil
 }
 
 func resizeMaxWidth(src image.Image, maxWidth int) image.Image {
@@ -276,7 +374,8 @@ func resizeMaxWidth(src image.Image, maxWidth int) image.Image {
 
 func quantize(src image.Image) *image.Paletted {
 	b := src.Bounds()
-	dst := image.NewPaletted(b, palette.Plan9)
-	draw.FloydSteinberg.Draw(dst, b, src, b.Min)
+	// Always origin at (0,0) so frames sit inside the GIF logical screen.
+	dst := image.NewPaletted(image.Rect(0, 0, b.Dx(), b.Dy()), palette.Plan9)
+	draw.FloydSteinberg.Draw(dst, dst.Bounds(), src, b.Min)
 	return dst
 }

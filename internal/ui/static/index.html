@@ -2,54 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
   <title>giffer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script>
+    /* Apply contrast before paint so brand text is readable on first frame. */
+    (function () {
+      var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.setAttribute("data-contrast", dark ? "dark" : "light");
+    })();
+  </script>
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
   <div class="stage">
     <header class="brand">
       <p class="mark">giffer</p>
-      <h1>Zip in. Motion out.</h1>
-      <p class="lede">Drop a photo zip. Tune the frame, hit convert, grab the GIF.</p>
+      <div class="brand-copy">
+        <h1>Photos in. Motion out.</h1>
+        <p class="lede">Drop an archive of photos in order — we stitch the series into one animated GIF.</p>
+      </div>
     </header>
 
-    <main class="panel">
-      <form id="form" novalidate>
-        <label class="drop" id="drop">
-          <input id="file" name="file" type="file" accept=".zip,application/zip" required />
-          <span class="drop-title" id="drop-label">Drop a .zip here</span>
-          <span class="drop-hint">or click to choose</span>
-        </label>
-
-        <div class="fields">
-          <label>
-            <span>delay-ms</span>
-            <input id="delay-ms" name="delay-ms" type="number" min="1" step="1" value="500" />
+    <main class="workspace">
+      <section class="controls" aria-label="Convert controls">
+        <form id="form" novalidate>
+          <label class="drop" id="drop">
+            <input
+              id="file"
+              name="file"
+              type="file"
+              accept=".zip,.tar,.tgz,.tar.gz,.tbz2,.tbz,.tar.bz2,.txz,.tar.xz,.7z,application/zip,application/x-tar,application/gzip,application/x-bzip2,application/x-xz,application/x-7z-compressed"
+              required
+            />
+            <span class="drop-title" id="drop-label">Drop a photo archive</span>
+            <span class="drop-hint">zip of JPEG/PNG/WebP/GIF photos in order — not audio or other files</span>
+            <ul class="formats" aria-label="Supported archive formats">
+              <li>zip</li>
+              <li>tar.gz</li>
+              <li>tar.bz2</li>
+              <li>tar.xz</li>
+              <li>tar</li>
+              <li>7z</li>
+            </ul>
           </label>
-          <label>
-            <span>max-width</span>
-            <input id="max-width" name="max-width" type="number" min="1" step="1" value="800" />
-          </label>
-          <label>
-            <span>loop</span>
-            <input id="loop" name="loop" type="number" min="0" step="1" value="0" />
-          </label>
-        </div>
 
-        <button type="submit" id="go">Convert</button>
-      </form>
+          <div class="fields">
+            <label>
+              <span>delay-ms</span>
+              <input id="delay-ms" name="delay-ms" type="number" min="1" step="10" value="100" title="GIF delay; 100ms is the usual safe default" />
+            </label>
+            <label>
+              <span>max-width (0=first)</span>
+              <input id="max-width" name="max-width" type="number" min="0" step="1" value="0" title="0 = use first photo width" />
+            </label>
+            <label>
+              <span>loop (0=forever)</span>
+              <input id="loop" name="loop" type="number" min="0" step="1" value="0" title="0 = loop forever" />
+            </label>
+          </div>
 
-      <p class="status" id="status" hidden></p>
-      <figure class="result" id="result" hidden>
-        <img id="preview" alt="Converted GIF preview" />
-        <a id="download" download>Download GIF</a>
-      </figure>
+          <div class="progress" id="progress" hidden>
+            <div class="progress-meta">
+              <span id="progress-label">Converting…</span>
+              <span id="progress-pct">0%</span>
+            </div>
+            <progress id="progress-bar" max="100" value="0"></progress>
+          </div>
+
+          <p class="status" id="status" hidden></p>
+
+          <button type="submit" id="go">Convert</button>
+        </form>
+      </section>
+
+      <section class="preview-pane" aria-label="GIF preview">
+        <figure class="result is-empty" id="result">
+          <div class="forge" id="forge" hidden aria-hidden="true">
+            <canvas class="forge-canvas" id="forge-canvas"></canvas>
+            <p class="forge-caption" id="forge-caption">Conjuring frames…</p>
+          </div>
+          <p class="result-empty" id="result-empty">GIF shows here</p>
+          <img id="preview" alt="Converted GIF preview" hidden />
+          <a id="download" download hidden>Download GIF</a>
+        </figure>
+      </section>
     </main>
+
+    <footer class="credit">
+      <a class="credit-link" href="http://alienfacepalm.com/" target="_blank" rel="noopener noreferrer">
+        <img class="credit-mark" src="/afp-mark.png" alt="" width="28" height="28" />
+        <span class="credit-copy">an AlienFacepalm joint</span>
+      </a>
+    </footer>
   </div>
+  <script src="/three.min.js"></script>
+  <script src="/forge.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

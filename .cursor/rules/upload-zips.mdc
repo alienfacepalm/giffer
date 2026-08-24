@@ -9,4 +9,4 @@ alwaysApply: true
 - CLI examples and docs should use paths like `upload/photos.zip` or `upload/vacation/`.
 - Do not leave loose input zips at the repo root.
 - Default GIF output (when `--output` is omitted) stays beside the input under `upload/`.
-- Bare `./giffer` batch-processes `upload/` and skips sources that already have a matching `.gif`.
+- Bare `./giffer` on a terminal opens the CLI wizard; non-interactive / flagged runs batch-process `upload/` and skip sources that already have a matching `.gif`.

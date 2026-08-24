@@ -3,6 +3,8 @@ package convert
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -45,6 +47,41 @@ func TestIsSupportedImage(t *testing.T) {
 		if isSupportedImage(name) {
 			t.Fatalf("expected unsupported: %s", name)
 		}
+	}
+}
+
+func TestZipToGIFReportsProgress(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	outPath := filepath.Join(dir, "photos.gif")
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"a.png": {img: solid(40, 20, color.White), format: "png"},
+		"b.png": {img: solid(40, 20, color.Black), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var stages []string
+	var lastPct int
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 40,
+		Loop:     0,
+		OnProgress: func(p Progress) {
+			stages = append(stages, p.Stage)
+			lastPct = p.Percent
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(stages, ",")
+	if !strings.Contains(joined, "reading") || !strings.Contains(joined, "encoding") || !strings.Contains(joined, "writing") {
+		t.Fatalf("stages=%v", stages)
+	}
+	if lastPct != 100 {
+		t.Fatalf("last percent=%d want 100", lastPct)
 	}
 }
 
@@ -153,6 +190,92 @@ func TestZipToGIFLeavesNarrowImagesUnscaled(t *testing.T) {
 	}
 	if g.Delay[0] != 20 {
 		t.Fatalf("delay=%d want 20", g.Delay[0])
+	}
+}
+
+func TestZipToGIFMaxWidthZeroUsesFirstFrameWidth(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	outPath := filepath.Join(dir, "out.gif")
+
+	// Sorted order: a.png (40px) then b.png (80px). MaxWidth 0 should baseline on a.png.
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"b.png": {img: solid(80, 40, color.White), format: "png"},
+		"a.png": {img: solid(40, 20, color.Black), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 0,
+		Loop:     0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
+	}
+	for i, frame := range g.Image {
+		if frame.Bounds().Dx() != 40 {
+			t.Fatalf("frame %d width=%d want 40 (first-photo baseline)", i, frame.Bounds().Dx())
+		}
+	}
+}
+
+func TestZipToGIFMixedAspectRatios(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "mixed.zip")
+	outPath := filepath.Join(dir, "out.gif")
+
+	// Landscape first, taller portrait second — used to trigger
+	// "gif: image block is out of bounds" when the screen was first-frame-only.
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"a-wide.png": {img: solid(100, 40, color.White), format: "png"},
+		"b-tall.png": {img: solid(50, 120, color.Black), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 800,
+		Loop:     0,
+	}); err != nil {
+		t.Fatalf("mixed aspect ratios should encode: %v", err)
+	}
+
+	g := decodeGIF(t, outPath)
+	if len(g.Image) != 2 {
+		t.Fatalf("frames=%d want 2", len(g.Image))
+	}
+	if g.Config.Width < 100 || g.Config.Height < 120 {
+		t.Fatalf("screen=%dx%d want at least 100x120", g.Config.Width, g.Config.Height)
+	}
+}
+
+func TestEncodeGIFErrorActionable(t *testing.T) {
+	err := encodeGIFError(errors.New("gif: image block is out of bounds"))
+	msg := err.Error()
+	if strings.Contains(msg, "encode gif:") {
+		t.Fatalf("should not leak raw encode gif prefix: %q", msg)
+	}
+	if !strings.Contains(msg, "--max-width") {
+		t.Fatalf("want --max-width action, got %q", msg)
+	}
+	if !strings.Contains(msg, "try again") {
+		t.Fatalf("want try-again guidance, got %q", msg)
+	}
+
+	um := UserMessage(fmt.Errorf("encode gif: gif: image block is out of bounds"))
+	if !strings.Contains(um, "--max-width") && !strings.Contains(um, "try again") {
+		t.Fatalf("UserMessage should give an action, got %q", um)
 	}
 }
 
