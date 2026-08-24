@@ -1,9 +1,9 @@
 # Binaries / build
 /bin/
 /dist/
-/release/*
-!/release/.gitkeep
 *.exe
+!/release/
+!/release/**
 *.test
 *.out
 *.gif

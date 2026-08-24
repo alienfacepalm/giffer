@@ -6,17 +6,17 @@ Turn a **series of photos** (archive or folder) into an animated GIF.
 
 ## Download
 
-Grab the latest binaries from [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
+Prebuilt binaries live in [`release/`](release/) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
 
-| Platform | Asset |
-|----------|--------|
-| Windows (x64) | `giffer-windows-amd64.exe` |
-| Linux (x64) | `giffer-linux-amd64` |
-| Linux (ARM64) | `giffer-linux-arm64` |
-| macOS (Intel) | `giffer-darwin-amd64` |
-| macOS (Apple Silicon) | `giffer-darwin-arm64` |
+| Platform | File |
+|----------|------|
+| Windows (x64) | [`giffer-windows-amd64.exe`](release/giffer-windows-amd64.exe) |
+| Linux (x64) | [`giffer-linux-amd64`](release/giffer-linux-amd64) |
+| Linux (ARM64) | [`giffer-linux-arm64`](release/giffer-linux-arm64) |
+| macOS (Intel) | [`giffer-darwin-amd64`](release/giffer-darwin-amd64) |
+| macOS (Apple Silicon) | [`giffer-darwin-arm64`](release/giffer-darwin-arm64) |
 
-Download the asset for your OS, then:
+Download the file for your OS, then:
 
 ```bash
 # Linux / macOS
@@ -73,7 +73,7 @@ Works the same on Windows, Linux, and macOS: all UI assets (including fonts and 
 
 ```bash
 make build          # local binary → bin/giffer
-make release        # all platforms → release/ (gitignored)
+make release        # all platforms → release/
 ```
 
 Tagged releases (`v*`) are built and uploaded by GitHub Actions — see `.github/workflows/release.yml`.
