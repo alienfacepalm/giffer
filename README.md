@@ -2,7 +2,7 @@
 
 Turn a **series of photos** (archive or folder) into an animated GIF.
 
-**Release:** v1.1.0 — Windows, Linux, and macOS.
+**Release:** v1.0.2 — Windows, Linux, and macOS.
 
 ## Download
 

@@ -17,7 +17,7 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: v1.1.0** (Windows, Linux, macOS).
+**Current release: v1.0.2** (Windows, Linux, macOS).
 
 Prebuilt, statically linked binaries (no CGO) are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
 
@@ -30,7 +30,7 @@ Prebuilt, statically linked binaries (no CGO) are committed under `release/<plat
 | macOS (Intel) | `release/darwin-amd64/giffer` |
 | macOS (Apple Silicon) | `release/darwin-arm64/giffer` |
 
-GitHub Releases also include `SHA256SUMS` (asset names stay `giffer-<os>-<arch>` for clarity). Pushing a tag matching `v*` (for example `v1.0.1`) runs CI, builds all platforms, and uploads those assets. Rebuild committed copies with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
+GitHub Releases also include `SHA256SUMS` (asset names stay `giffer-<os>-<arch>` for clarity). Pushing a tag matching `v*` (for example `v1.0.2`) runs CI, builds all platforms, and uploads those assets. Rebuild committed copies with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
 
 On Linux/macOS, downloaded binaries need execute permission (`chmod +x`). Put an `upload/` directory next to the binary (or pass `--input`).
 

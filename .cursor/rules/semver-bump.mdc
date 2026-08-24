@@ -1,0 +1,43 @@
+---
+description: Bump semver and tag on every release-affecting change
+alwaysApply: true
+---
+
+# Semver Bump on Release
+
+When shipping binaries or any release-affecting change (new platform, release layout, CI release workflow), **always increment semver** — never reuse an existing tag for new binaries.
+
+## Where to bump
+
+Update both:
+
+- `README.md` — `**Release:** vX.Y.Z` line
+- `SPEC.md` — `**Current release: vX.Y.Z**` line
+
+Keep platform tables and `release/README.md` in sync with `release/<platform>/` layout (`giffer` or `giffer.exe`).
+
+## Which segment
+
+| Change | Bump | Example |
+|--------|------|---------|
+| Bug fix, docs-only sync, small tweak | **Patch** | v1.0.1 → v1.0.2 |
+| New feature (platform, flag, behavior) | **Minor** | v1.0.2 → v1.1.0 |
+| Breaking CLI/API change | **Major** | v1.1.0 → v2.0.0 |
+
+Check existing tags (`git tag -l "v*"`) and pick the next unused version.
+
+## Release checklist
+
+1. Bump version in `README.md` and `SPEC.md`.
+2. Rebuild committed binaries: `make release`.
+3. Commit changes under `release/` with the version bump.
+4. Tag: `git tag vX.Y.Z` (annotated tag preferred).
+5. Push branch and tag: `git push origin master && git push origin vX.Y.Z`.
+
+Pushing a `v*` tag triggers `.github/workflows/release.yml` (GitHub Release + `SHA256SUMS`).
+
+## Do not
+
+- Re-tag or overwrite an existing `v*` tag with different binaries.
+- Commit release binaries without bumping the documented version.
+- Leave `README.md` / `SPEC.md` on an older version than the latest tag.
