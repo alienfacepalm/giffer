@@ -35,7 +35,11 @@ jobs:
         run: go test ./...
 
       - name: Install webkit (Linux desktop)
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          pc_path="$(pkg-config --path webkit2gtk-4.1)"
+          sudo ln -sf "$pc_path" "${pc_path/4.1/4.0}"
 
       - name: go build desktop GUI (Linux)
         run: CGO_ENABLED=1 go build -tags desktop -o bin/giffer ./cmd/giffer
