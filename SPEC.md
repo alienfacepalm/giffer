@@ -17,24 +17,34 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: v1.1.1** (Windows, Linux, macOS).
+**Current release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)** (Windows, Linux, macOS).
 
-Prebuilt binaries with embedded webview are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
+### Quick start (users)
 
-| Platform | Path | Double-click |
-|----------|------|--------------|
-| Windows (x64) | `release/windows-amd64/giffer.exe` | `giffer.exe` |
-| Windows (x86) | `release/windows-386/giffer.exe` | `giffer.exe` |
-| Linux (x64) | `release/linux-amd64/giffer` | `giffer` (`chmod +x` first) |
-| Linux (ARM64) | `release/linux-arm64/giffer` | `giffer` (`chmod +x` first) |
-| macOS (Intel) | `release/darwin-amd64/Giffer.app` | `Giffer.app` |
-| macOS (Apple Silicon) | `release/darwin-arm64/Giffer.app` | `Giffer.app` |
+| OS | Steps |
+|----|-------|
+| **Windows** | Download `giffer-windows-amd64.exe` → double-click → drop photo zip → Convert |
+| **macOS** | Download `Giffer-darwin-*.app.zip` → unzip → double-click `Giffer.app` → drop photo zip → Convert |
+| **Linux** | Download `giffer-linux-*` → `chmod +x giffer` → run or double-click → drop photo zip → Convert |
 
-GitHub Releases also include `SHA256SUMS` (asset names stay `giffer-<os>-<arch>` for clarity) and zipped `Giffer-darwin-*.app.zip` bundles. Pushing a tag matching `v*` (for example `v1.1.0`) runs CI, builds all platforms, and uploads those assets. Rebuild committed copies with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
+Full download links and troubleshooting: [`release/README.md`](release/README.md) and [GitHub Releases](https://github.com/alienfacepalm/giffer/releases/latest).
 
-Double-clicking a release binary opens the Phase 2 UI in a native window. From a terminal with no flags on a TTY, Phase 1 wizard runs instead. `giffer ui` always opens the UI window.
+### Release layout
 
-On Linux/macOS, downloaded binaries need execute permission (`chmod +x`). Put an `upload/` directory next to the binary (or pass `--input`).
+Prebuilt native apps are committed under `release/<platform>/` and published on GitHub Releases:
+
+| Platform | Path | Run |
+|----------|------|-----|
+| Windows (x64) | `release/windows-amd64/giffer.exe` | Double-click |
+| Windows (x86) | `release/windows-386/giffer.exe` | Double-click |
+| Linux (x64) | `release/linux-amd64/giffer` | `chmod +x`, then double-click or `./giffer` |
+| Linux (ARM64) | `release/linux-arm64/giffer` | same |
+| macOS (Intel) | `release/darwin-amd64/Giffer.app` | Double-click |
+| macOS (Apple Silicon) | `release/darwin-arm64/Giffer.app` | Double-click |
+
+GitHub Releases include flat download names (`giffer-windows-amd64.exe`, …), `Giffer-darwin-*.app.zip`, and `SHA256SUMS`. Pushing a `v*` tag runs CI and uploads assets. Rebuild committed copies with `make release`.
+
+Double-clicking opens the Phase 2 UI in a native window. Terminal `./giffer` with no flags on a TTY runs the Phase 1 wizard. `giffer ui` always opens the UI window.
 
 ---
 

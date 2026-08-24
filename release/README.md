@@ -1,43 +1,76 @@
-# giffer downloads
+# Download giffer
 
-Native GUI apps with an embedded webview for the convert UI. Pick your platform folder, download, and double-click to run.
+**Latest release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)**
 
-| Folder | OS / CPU | Double-click | Terminal |
-|--------|----------|--------------|----------|
-| [`windows-amd64/`](windows-amd64/) | Windows x64 | `giffer.exe` | `giffer.exe ui` |
-| [`windows-386/`](windows-386/) | Windows x86 (32-bit) | `giffer.exe` | `giffer.exe ui` |
-| [`linux-amd64/`](linux-amd64/) | Linux x64 | `giffer` | `./giffer ui` |
-| [`linux-arm64/`](linux-arm64/) | Linux ARM64 | `giffer` | `./giffer ui` |
-| [`darwin-amd64/`](darwin-amd64/) | macOS Intel | `Giffer.app` | `./giffer ui` |
-| [`darwin-arm64/`](darwin-arm64/) | macOS Apple Silicon | `Giffer.app` | `./giffer ui` |
+Turn a folder or zip of photos into an animated GIF. No install, no terminal required — just download and double-click.
 
-## Quick start
+---
 
-**Windows:** double-click `giffer.exe`.
+## Windows
 
-**macOS:** double-click `Giffer.app` (bare `giffer` binary also included for terminal use).
+1. **Download** [`giffer.exe`](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-windows-amd64.exe) (64-bit) or [`giffer.exe` 32-bit](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-windows-386.exe)
+2. **Double-click** `giffer.exe`
+3. **Drop** your photo zip (or pick a file) in the window → click **Convert**
 
-**Linux / macOS (terminal)**
+Your GIF saves in an `upload/` folder next to the exe.
+
+---
+
+## Mac
+
+1. **Download** [`Giffer.app.zip`](https://github.com/alienfacepalm/giffer/releases/latest/download/Giffer-darwin-arm64.app.zip) (Apple Silicon) or [Intel version](https://github.com/alienfacepalm/giffer/releases/latest/download/Giffer-darwin-amd64.app.zip)
+2. **Unzip**, then **double-click** `Giffer.app`
+3. **Drop** your photo zip in the window → click **Convert**
+
+First launch: if macOS blocks the app, right-click `Giffer.app` → **Open** → **Open** again.
+
+Your GIF saves in an `upload/` folder next to the app.
+
+---
+
+## Linux
+
+1. **Download** [`giffer`](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-linux-amd64) (64-bit) or [ARM64 version](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-linux-arm64)
+2. **Make it executable**, then run it:
+   ```bash
+   chmod +x giffer
+   ./giffer
+   ```
+   Or double-click in your file manager after allowing execute permission.
+3. **Drop** your photo zip in the window → click **Convert**
+
+If the window does not open, install WebKit once: `sudo apt install libwebkit2gtk-4.1-0` (Ubuntu/Debian).
+
+Your GIF saves in an `upload/` folder next to the binary.
+
+---
+
+## Supported photo inputs
+
+`.zip`, `.tar`, `.tar.gz`, `.7z`, and folders of `.jpg` / `.png` / `.webp` images.
+
+---
+
+## All platforms (browse files)
+
+| Your computer | Download from repo |
+|---------------|-------------------|
+| Windows 64-bit | [`windows-amd64/giffer.exe`](windows-amd64/giffer.exe) |
+| Windows 32-bit | [`windows-386/giffer.exe`](windows-386/giffer.exe) |
+| Linux 64-bit | [`linux-amd64/giffer`](linux-amd64/giffer) |
+| Linux ARM | [`linux-arm64/giffer`](linux-arm64/giffer) |
+| Mac Intel | [`darwin-amd64/Giffer.app`](darwin-amd64/Giffer.app) |
+| Mac Apple Silicon | [`darwin-arm64/Giffer.app`](darwin-arm64/Giffer.app) |
+
+Checksums: [`SHA256SUMS`](SHA256SUMS)
+
+---
+
+## Terminal / CLI (optional)
 
 ```bash
-chmod +x giffer
-./giffer          # wizard on a TTY
-./giffer ui       # UI window
+./giffer ui              # open the UI window
+./giffer --input photos.zip   # convert from the command line
 ```
 
-**Windows (PowerShell)**
-
-```powershell
-.\giffer.exe      # wizard in a terminal
-.\giffer.exe ui   # UI window
-```
-
-Put photo archives or folders in an `upload/` directory next to the binary (or pass `--input`).
-
-| OS | Notes |
-|----|-------|
-| Windows | WebView2 Runtime (included on Windows 10/11) |
-| Linux | Install `libwebkit2gtk-4.1-0` (or 4.0) if missing |
-| macOS | Uses system WebKit |
-
-Tagged [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) mirror these builds and include `SHA256SUMS`.
+See the [main README](../README.md) for all flags.

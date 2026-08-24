@@ -1,95 +1,105 @@
 # giffer
 
-Turn a **series of photos** (archive or folder) into an animated GIF.
+Turn a **series of photos** (zip or folder) into an animated GIF.
 
-**Release:** v1.1.1 — Windows, Linux, and macOS.
+**Latest release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)** — Windows, Mac, and Linux. Download, double-click, convert.
 
-## Download
+## Quick start
 
-Prebuilt binaries live under [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release) (one directory per platform) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
+### Windows
+1. Download **[giffer.exe](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-windows-amd64.exe)**
+2. **Double-click** it
+3. Drop your photo zip in the window → **Convert**
 
-| Platform | Path | Double-click |
-|----------|------|--------------|
-| Windows (x64) | [`windows-amd64/giffer.exe`](release/windows-amd64/giffer.exe) | `giffer.exe` |
-| Windows (x86) | [`windows-386/giffer.exe`](release/windows-386/giffer.exe) | `giffer.exe` |
-| Linux (x64) | [`linux-amd64/giffer`](release/linux-amd64/giffer) | `giffer` (`chmod +x` first) |
-| Linux (ARM64) | [`linux-arm64/giffer`](release/linux-arm64/giffer) | `giffer` (`chmod +x` first) |
-| macOS (Intel) | [`darwin-amd64/Giffer.app`](release/darwin-amd64/Giffer.app) | `Giffer.app` |
-| macOS (Apple Silicon) | [`darwin-arm64/Giffer.app`](release/darwin-arm64/Giffer.app) | `Giffer.app` |
+### Mac
+1. Download **[Giffer.app.zip](https://github.com/alienfacepalm/giffer/releases/latest/download/Giffer-darwin-arm64.app.zip)** ([Intel Mac](https://github.com/alienfacepalm/giffer/releases/latest/download/Giffer-darwin-amd64.app.zip))
+2. Unzip → **double-click** `Giffer.app`
+3. Drop your photo zip → **Convert**
 
-Each release build is a **native GUI app** with an embedded webview. Double-click opens the convert UI in its own window — no terminal, no browser tab. CLI flags and `giffer ui` still work from a terminal.
+> Blocked by Gatekeeper? Right-click `Giffer.app` → **Open** → **Open** again.
 
-```bash
-# Linux / macOS
-chmod +x giffer
-./giffer          # wizard on a TTY; double-click opens the UI window
-./giffer ui       # always open the UI window
-```
+### Linux
+1. Download **[giffer](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-linux-amd64)** ([ARM64](https://github.com/alienfacepalm/giffer/releases/latest/download/giffer-linux-arm64))
+2. `chmod +x giffer` then `./giffer` (or double-click after allowing execute)
+3. Drop your photo zip → **Convert**
+
+> Window won't open? Run once: `sudo apt install libwebkit2gtk-4.1-0`
+
+GIF output lands in an `upload/` folder next to the app. Supported inputs: `.zip`, `.tar.gz`, `.7z`, and image folders.
+
+---
+
+## Download all platforms
+
+Prebuilt apps live in [`release/`](release/) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases/latest) (includes `SHA256SUMS`):
+
+| Platform | File | How to run |
+|----------|------|------------|
+| Windows (64-bit) | [`giffer.exe`](release/windows-amd64/giffer.exe) | Double-click |
+| Windows (32-bit) | [`giffer.exe`](release/windows-386/giffer.exe) | Double-click |
+| Linux (64-bit) | [`giffer`](release/linux-amd64/giffer) | `chmod +x giffer` then double-click or `./giffer` |
+| Linux (ARM64) | [`giffer`](release/linux-arm64/giffer) | same as above |
+| macOS (Intel) | [`Giffer.app`](release/darwin-amd64/Giffer.app) | Double-click |
+| macOS (Apple Silicon) | [`Giffer.app`](release/darwin-arm64/Giffer.app) | Double-click |
+
+Each build is a **native app** with an embedded window — not a browser tab, no Go install needed.
+
+---
+
+## Usage (terminal)
+
+Double-click opens the UI. From a terminal:
 
 ```powershell
 # Windows
-.\giffer.exe      # wizard in a terminal; double-click opens the UI window
-.\giffer.exe ui   # always open the UI window
+.\giffer.exe ui          # open UI
+.\giffer.exe --input upload\photos.zip
 ```
 
-Put photo archives or folders in an `upload/` directory next to the binary (or pass `--input`).
+```bash
+# Mac / Linux
+./giffer ui              # open UI
+./giffer                 # interactive wizard (terminal only)
+./giffer --input upload/photos.zip
+```
 
-## Usage
+With **no flags** in a terminal, `./giffer` opens the wizard. **Double-click** (or `./giffer ui`) opens the UI window. With flags but no `--input`, it batch-converts everything in `upload/`.
 
-On a terminal with no flags, `./giffer` opens a short wizard (batch vs single, delay, width, loop). Double-clicking the release binary opens the UI window instead. In scripts or when any flag is set without `--input`, it batch-converts `upload/` (skips sources that already have a matching `.gif`).
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--input` | (wizard / batch) | photo archive or directory |
+| `--output` | beside input | destination `.gif` |
+| `--delay-ms` | `100` | milliseconds per frame |
+| `--max-width` | `0` | max width; `0` = first photo width |
+| `--loop` | `0` | `0` = loop forever |
 
 **Supported archives:** `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2`, `.tar.xz` / `.txz`, `.7z`
 
-Single conversion:
-
-```bash
-./giffer --input upload/photos.zip
-./giffer --input upload/photos.tar.gz
-./giffer --input upload/vacation/
-```
-
-| Flag | Default | Meaning |
-|------|---------|---------|
-| `--input` | (wizard / batch `upload/`) | photo archive or directory |
-| `--output` | beside input | destination `.gif` |
-| `--delay-ms` | `100` | frame delay (GIF-safe default) |
-| `--max-width` | `0` | max frame width; `0` = first photo width |
-| `--loop` | `0` | `0` = loop forever |
+---
 
 ## Local UI
 
-Double-click the release binary, or run `./giffer ui`.
-
-Opens the convert UI in a native window (embedded webview) — not an external browser tab. The UI listens on `http://127.0.0.1:8765` internally; always that port, never a random one. If something is already listening there, giffer kills it and takes over.
-
-All UI assets (including fonts and Three.js) are embedded in the binary. Drop a photo archive (zip, tar.gz, 7z, and other supported formats). Uploaded archives and GIF output land in `upload/` next to the binary (override with `--upload-dir`). **Reset** clears the form, preview, and in-flight convert.
+The UI runs in a native window on `http://127.0.0.1:8765` internally. Drop a photo archive, set delay/width/loop, click **Convert**. **Reset** clears the form and preview.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--addr` | `127.0.0.1:8765` | Listen address (fixed; never remapped) |
-| `--upload-dir` | beside the binary | Uploaded archives and GIF output |
+| `--addr` | `127.0.0.1:8765` | listen address (fixed) |
+| `--upload-dir` | beside the binary | uploads and GIF output |
 
-### Platform notes (embedded webview)
+| OS | One-time requirement |
+|----|---------------------|
+| Windows | WebView2 (built into Windows 10/11) |
+| Linux | `libwebkit2gtk-4.1-0` |
+| macOS | none (uses system WebKit) |
 
-| OS | Requirement |
-|----|-------------|
-| Windows | WebView2 Runtime (included on Windows 10/11) |
-| Linux | `libwebkit2gtk-4.1-0` (or 4.0) at runtime |
-| macOS | System WebKit (no extra install) |
+---
 
 ## Build
 
 ```bash
-make build          # local dev binary → bin/giffer (console on Windows)
-make build-gui      # release-style GUI binary → bin/giffer (double-click test)
+make build          # dev binary → bin/giffer
+make build-gui      # release-style GUI binary (double-click test)
 make release        # all platforms → release/
 ```
 
-Release builds use the `desktop` tag and ship as native GUI apps:
-- **Windows:** `giffer.exe` with `-H=windowsgui` (no console flash on double-click)
-- **macOS:** `Giffer.app` bundle plus bare `giffer` for terminal use
-- **Linux:** executable `giffer` (file manager double-click after `chmod +x`)
-
-Windows uses go-webview2 (no CGO). Linux and macOS use webview_go (CGO; Linux build needs `libwebkit2gtk-4.1-dev`).
-
-Tagged releases (`v*`) are built and uploaded by GitHub Actions — see `.github/workflows/release.yml`.
+Tagged releases (`v*`) are built by GitHub Actions — see `.github/workflows/release.yml`.

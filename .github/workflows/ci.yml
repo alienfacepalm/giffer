@@ -31,13 +31,8 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: Install desktop build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev
-
       - name: go test
         run: go test ./...
 
-      - name: go build desktop GUI
-        run: go build -tags desktop -o bin/giffer ./cmd/giffer
+      - name: go build desktop GUI (Windows)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -tags desktop -o bin/giffer.exe ./cmd/giffer
