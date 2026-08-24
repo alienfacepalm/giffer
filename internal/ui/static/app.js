@@ -4,18 +4,25 @@
   const drop = document.getElementById("drop");
   const dropLabel = document.getElementById("drop-label");
   const go = document.getElementById("go");
-  const resetBtn = document.getElementById("reset");
+  const resetBtn = document.getElementById("reset-btn");
   const status = document.getElementById("status");
   const progress = document.getElementById("progress");
   const progressBar = document.getElementById("progress-bar");
   const progressLabel = document.getElementById("progress-label");
   const progressPct = document.getElementById("progress-pct");
   const result = document.getElementById("result");
+  const resultStage = document.getElementById("result-stage");
+  const resultFilename = document.getElementById("result-filename");
   const preview = document.getElementById("preview");
   const download = document.getElementById("download");
   const forge = document.getElementById("forge");
   const forgeCanvas = document.getElementById("forge-canvas");
   const forgeCaption = document.getElementById("forge-caption");
+
+  function csrfToken() {
+    const el = document.querySelector('meta[name="giffer-csrf"]');
+    return (el && el.getAttribute("content")) || "";
+  }
 
   /** @type {AbortController | null} */
   let convertAbort = null;
@@ -170,6 +177,7 @@
     ".tar.xz",
     ".txz",
     ".7z",
+    ".rar",
   ];
 
   function isPhotoArchiveName(name) {
@@ -179,7 +187,7 @@
 
   function validateArchiveFile(file) {
     if (!file) {
-      return "Choose a photo archive first (a zip/tar/7z of JPEG, PNG, WebP, or GIF images).";
+      return "Choose a photo archive first (a zip/tar/7z/rar of JPEG, PNG, WebP, or GIF images).";
     }
     if (!isPhotoArchiveName(file.name)) {
       return (
@@ -189,6 +197,30 @@
       );
     }
     // Client cannot peek inside the zip; server rejects non-photo contents with a fix-it message.
+    return "";
+  }
+
+  function validateTunables() {
+    const delayEl = document.getElementById("delay-ms");
+    const widthEl = document.getElementById("max-width");
+    const loopEl = document.getElementById("loop");
+    const outEl = document.getElementById("output");
+    const delay = Number(delayEl && delayEl.value);
+    const maxWidth = Number(widthEl && widthEl.value);
+    const loop = Number(loopEl && loopEl.value);
+    if (!Number.isFinite(delay) || delay <= 0) {
+      return "delay-ms must be an integer > 0";
+    }
+    if (!Number.isFinite(maxWidth) || maxWidth < 0) {
+      return "max-width must be an integer >= 0";
+    }
+    if (!Number.isFinite(loop) || loop < 0) {
+      return "loop must be an integer >= 0";
+    }
+    const out = ((outEl && outEl.value) || "").trim();
+    if (out && !/\.gif$/i.test(out)) {
+      return "output must end in .gif";
+    }
     return "";
   }
 
@@ -255,16 +287,19 @@
   }
 
   function setFileName(name) {
-    dropLabel.textContent = name || "Drop a photo archive";
+    dropLabel.textContent = name || "Photo archive";
   }
 
   function clearPreview() {
     stopForge();
     result.classList.add("is-empty");
+    result.classList.remove("is-ready");
+    if (resultStage) resultStage.hidden = true;
     preview.hidden = true;
     download.hidden = true;
     preview.removeAttribute("src");
     download.removeAttribute("href");
+    if (resultFilename) resultFilename.textContent = "";
   }
 
   /** Restore file, fields, progress, status, and preview to first-load defaults. */
@@ -273,7 +308,8 @@
       convertAbort.abort();
       convertAbort = null;
     }
-    form.reset();
+    // Use the prototype method: a control named/id'd "reset" would shadow form.reset.
+    HTMLFormElement.prototype.reset.call(form);
     fileInput.value = "";
     drop.classList.remove("is-drag");
     setFileName("");
@@ -286,12 +322,19 @@
 
   function showPreview(url, filename) {
     stopForge();
+    const name = filename || "out.gif";
     preview.src = url;
     preview.hidden = false;
     download.href = url;
-    download.download = filename || "out.gif";
+    download.download = name;
     download.hidden = false;
+    if (resultFilename) resultFilename.textContent = name;
+    if (resultStage) resultStage.hidden = false;
     result.classList.remove("is-empty");
+    result.classList.remove("is-ready");
+    // Retrigger entrance so repeat converts still animate.
+    void result.offsetWidth;
+    result.classList.add("is-ready");
   }
 
   ["dragenter", "dragover"].forEach((evt) => {
@@ -368,7 +411,7 @@
           throw new Error(ev.error || "Conversion failed.");
         } else if (ev.type === "done") {
           setProgress(100, "Done");
-          updateForge(100, "Sealing the GIF…");
+          updateForge(100, "Writing GIF…");
           final = ev;
         }
       }
@@ -404,12 +447,21 @@
       setStatus(bad, "error");
       return;
     }
+    const badParams = validateTunables();
+    if (badParams) {
+      setStatus(badParams, "error");
+      return;
+    }
 
     const body = new FormData();
     body.set("file", picked);
     body.set("delay-ms", document.getElementById("delay-ms").value);
     body.set("max-width", document.getElementById("max-width").value);
     body.set("loop", document.getElementById("loop").value);
+    const outVal = (document.getElementById("output")?.value || "").trim();
+    if (outVal) body.set("output", outVal);
+    const token = csrfToken();
+    if (token) body.set("csrf", token);
 
     if (convertAbort) convertAbort.abort();
     const ac = new AbortController();
@@ -419,19 +471,24 @@
     go.disabled = true;
     setProgress(0, "Uploading…");
     startForge();
-    updateForge(0, "Opening the archive…");
+    updateForge(0, "Reading archive…");
 
     try {
-      const res = await fetch("/api/convert", { method: "POST", body, signal });
+      const headers = {};
+      if (token) headers["X-Giffer-CSRF"] = token;
+      const res = await fetch("/api/convert", { method: "POST", body, headers, signal });
       if (!res.ok && !(res.headers.get("content-type") || "").includes("ndjson")) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Conversion failed.");
       }
       const data = await readConvertStream(res);
+      if (!data.url || typeof data.url !== "string") {
+        throw new Error("Conversion finished but no GIF URL was returned.");
+      }
       const url = data.url + "?t=" + Date.now();
-      const filename = (data.output || "out.gif").split(/[/\\]/).pop();
+      const filename = (data.output || "out.gif").split(/[/\\]/).pop() || "out.gif";
       showPreview(url, filename);
-      setStatus("Ready - " + data.output, "ok");
+      setStatus(filename + " ready", "ok");
     } catch (err) {
       if (err && err.name === "AbortError") {
         return;

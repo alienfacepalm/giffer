@@ -139,7 +139,7 @@ func TestShouldLaunchDesktopPipe(t *testing.T) {
 	defer outR.Close()
 	defer outW.Close()
 
-	if !shouldLaunchDesktop(inR, outW) {
-		t.Fatal("non-TTY file streams should launch desktop UI (double-click path)")
+	if shouldLaunchDesktop(inR, outW) {
+		t.Fatal("piped stdin/stdout must not launch desktop UI (batch/CI path)")
 	}
 }

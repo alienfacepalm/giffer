@@ -62,7 +62,7 @@ Frame decode (read/decompress) and frame encode (resize + palette) run on a work
 
 - Place input photo archives and/or photo directories in the project `upload/` directory.
 - Supported sources: a photo archive, or a directory of images (path may be absolute or relative; examples use `upload/<name>.zip`, `upload/<name>.tar.gz`, or `upload/<name>/`).
-- Supported archive formats: `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2`, `.tar.xz` / `.txz`, `.7z`.
+- Supported archive formats: `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2` / `.tbz`, `.tar.xz` / `.txz`, `.7z`, `.rar`.
 - Supported image types: `jpg` / `jpeg`, `png`, `webp`, and still `gif` frames treated as single images.
 - JPEG (and other EXIF-bearing) frames are auto-rotated using the EXIF Orientation tag so phone photos are right-side up in the GIF.
 - Non-image files and junk paths (for example `__MACOSX` and `.DS_Store`) are ignored.
@@ -206,24 +206,25 @@ giffer ui --addr 127.0.0.1:8765 --upload-dir upload
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--addr` | `127.0.0.1:8765` | Listen address; **never remapped** to another port |
+| `--addr` | `127.0.0.1:8765` | Listen address; **never remapped** to another port; loopback only unless `--allow-remote` |
 | `--upload-dir` | beside the binary (`<exe-dir>/upload`) | Directory for uploaded archives and GIF output; during `go run` / `go test` falls back to `upload/` in the working directory |
+| `--allow-remote` | off | Allow non-loopback `--addr` (exposes the convert API on the network) |
 
 - The UI is fully self-contained in the release binary (HTML/CSS/JS, Three.js, fonts). No CDN or network is required. The UI runs in an **embedded OS webview** (native window) — not an external browser tab.
 - A local HTTP server on `--addr` serves the embedded assets and conversion API to the webview.
-- If the configured address is already in use, giffer **reclaims** that port (stops the prior listener) and binds the same address — it does not pick a free alternate port.
+- If the configured address is already in use by another giffer UI, giffer **reclaims** that port (stops the prior giffer listener) and binds the same address — it does not pick a free alternate port, and it will not kill unrelated processes.
 
 ### Platform requirements (embedded webview)
 
 | OS | Runtime | Build (release) |
 |----|---------|-----------------|
 | Windows | WebView2 Runtime (Windows 10/11) | go-webview2, no CGO |
-| Linux | `libwebkit2gtk-4.1-0` (or 4.0) | `libwebkit2gtk-4.1-dev`, CGO |
+| Linux | `libwebkit2gtk-4.1-0` (or 4.0) | `libwebkit2gtk-4.0-dev`, CGO |
 | macOS | System WebKit | Xcode CLT, CGO |
 
 ### UI sketch
 
-- Photo-archive drop zone or file picker (`input`); copy explains a **series of photos in one archive**; supported formats shown as compact chips (zip, tar.gz, tar.bz2, tar.xz, tar, 7z). Chosen sources are treated like files under `upload/`.
+- Photo-archive drop zone or file picker (`input`); copy explains a **series of photos in one archive**; supported formats shown as compact chips (zip, tar.gz, tar.bz2, tar.xz, tar, 7z, rar). Chosen sources are treated like files under `upload/`.
 - Fields for `delay-ms`, `max-width`, and `loop` (pre-filled with Phase 1 defaults).
 - Output as download and/or path chooser (`output`).
 - One primary **Convert** action and a **Reset** control that restores defaults (file cleared, `delay-ms` / `max-width` / `loop` to Phase 1 defaults, progress/status/preview cleared; aborts an in-flight convert).

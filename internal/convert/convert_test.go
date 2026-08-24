@@ -522,10 +522,77 @@ func TestZipToGIFErrors(t *testing.T) {
 			DelayMS:  500,
 			MaxWidth: 800,
 		})
-		if err == nil || !strings.Contains(err.Error(), "no usable image frames") {
-			t.Fatalf("want no usable frames error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "could not decode image frames") {
+			t.Fatalf("want could not decode image frames error, got %v", err)
+		}
+		if !strings.Contains(err.Error(), "2 of 2 failed") {
+			t.Fatalf("want failed count in error, got %v", err)
 		}
 	})
+}
+
+func TestWriteGIFUsesRename(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	outPath := filepath.Join(dir, "photos.gif")
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"a.png": {img: solid(20, 10, color.White), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ZipToGIF(Options{
+		Input:    zipPath,
+		Output:   outPath,
+		DelayMS:  100,
+		MaxWidth: 20,
+		Loop:     0,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("expected output gif: %v", err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, "giffer-") && strings.HasSuffix(name, ".gif") {
+			t.Fatalf("leftover temp file: %s", name)
+		}
+		if strings.HasSuffix(name, ".tmp") {
+			t.Fatalf("leftover temp file: %s", name)
+		}
+	}
+}
+
+func TestValidateOptionsRejectsBadValues(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "photos.zip")
+	if err := writeTestZip(zipPath, map[string]imageEntry{
+		"a.png": {img: solid(8, 8, color.White), format: "png"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	out := filepath.Join(dir, "out.gif")
+	cases := []struct {
+		name string
+		opts Options
+		want string
+	}{
+		{"delay zero", Options{Input: zipPath, Output: out, DelayMS: 0, MaxWidth: 8}, "delay must be > 0"},
+		{"max-width negative", Options{Input: zipPath, Output: out, DelayMS: 100, MaxWidth: -1}, "max-width must be >= 0"},
+		{"loop negative", Options{Input: zipPath, Output: out, DelayMS: 100, MaxWidth: 8, Loop: -1}, "loop must be >= 0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Convert(tc.opts)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
 }
 
 type imageEntry struct {

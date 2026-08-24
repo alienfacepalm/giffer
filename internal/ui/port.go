@@ -24,11 +24,15 @@ func SetFreePortForTest(fn func(addr string) error) {
 	freePortFunc = fn
 }
 
-// freePort kills processes listening on addr so this process can bind it.
+// freePort kills a prior giffer listener on addr so this process can bind it.
+// It refuses to kill unknown processes — Probe must confirm X-Giffer first.
 func freePort(addr string) error {
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return fmt.Errorf("parse addr: %w", err)
+	}
+	if !Probe(httpURL(addr)) {
+		return fmt.Errorf("port %s is in use by a non-giffer process; stop it manually or choose another --addr", port)
 	}
 	pids, err := listeningPIDs(port)
 	if err != nil {

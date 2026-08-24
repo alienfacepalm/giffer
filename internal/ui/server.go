@@ -1,15 +1,22 @@
 package ui
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AlienFacepalm/giffer/internal/convert"
@@ -17,15 +24,18 @@ import (
 
 // Options configures the local UI server.
 type Options struct {
-	Addr      string // e.g. "127.0.0.1:8765"
-	UploadDir string
+	Addr        string // e.g. "127.0.0.1:8765"
+	UploadDir   string
+	AllowRemote bool // if false, refuse non-loopback binds
 }
 
 // Server is the Phase 2 local convert UI.
 type Server struct {
-	opts   Options
-	mux    *http.ServeMux
-	server *http.Server
+	opts      Options
+	mux       *http.ServeMux
+	server    *http.Server
+	csrfToken string
+	convertMu sync.Mutex
 }
 
 // New builds a UI server. UploadDir defaults to DefaultUploadDir().
@@ -36,9 +46,20 @@ func New(opts Options) *Server {
 	if strings.TrimSpace(opts.Addr) == "" {
 		opts.Addr = "127.0.0.1:8765"
 	}
-	s := &Server{opts: opts, mux: http.NewServeMux()}
+	s := &Server{opts: opts, mux: http.NewServeMux(), csrfToken: newCSRFToken()}
 	s.routes()
 	return s
+}
+
+// CSRFToken returns the per-process token embedded in the UI (for tests).
+func (s *Server) CSRFToken() string { return s.csrfToken }
+
+func newCSRFToken() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 func (s *Server) routes() {
@@ -56,8 +77,12 @@ func (s *Server) routes() {
 // Handler returns the HTTP handler (for tests).
 func (s *Server) Handler() http.Handler { return s.mux }
 
-// ListenAndServe starts the UI server and blocks.
+// ListenAndServe starts the UI server and blocks (no port reclaim).
+// Prefer Run for production launches.
 func (s *Server) ListenAndServe() error {
+	if err := ValidateListenAddr(s.opts.Addr, s.opts.AllowRemote); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(s.opts.UploadDir, 0o755); err != nil {
 		return fmt.Errorf("create upload dir: %w", err)
 	}
@@ -93,7 +118,8 @@ type convertResponse struct {
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set(gifferHeader, "1")
-	_, _ = w.Write(indexHTML)
+	html := strings.Replace(string(indexHTML), "{{CSRF_TOKEN}}", s.csrfToken, 1)
+	_, _ = io.WriteString(w, html)
 }
 
 func (s *Server) handleCSS(w http.ResponseWriter, r *http.Request) {
@@ -140,14 +166,29 @@ func (s *Server) handleFont(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
+	if err := checkOriginReferer(r, s.opts.Addr); err != nil {
+		writeJSON(w, http.StatusForbidden, convertResponse{Error: err.Error()})
+		return
+	}
+
 	const maxUpload = 512 << 20 // 512 MiB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUpload)
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		msg := "Upload failed. Use a photo archive under 512 MB and try again."
-		if strings.Contains(strings.ToLower(err.Error()), "too large") || strings.Contains(err.Error(), "MaxBytesReader") {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) || strings.Contains(strings.ToLower(err.Error()), "too large") {
 			msg = "Archive is too large (max 512 MB). Zip fewer or smaller photos and try again."
 		}
 		writeJSON(w, http.StatusBadRequest, convertResponse{Error: msg})
+		return
+	}
+
+	token := r.Header.Get("X-Giffer-CSRF")
+	if token == "" {
+		token = r.FormValue("csrf")
+	}
+	if err := s.checkCSRFToken(token); err != nil {
+		writeJSON(w, http.StatusForbidden, convertResponse{Error: "missing or invalid CSRF token"})
 		return
 	}
 
@@ -189,13 +230,34 @@ func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	outName := strings.TrimSpace(r.FormValue("output"))
+	if outName != "" {
+		outName = filepath.Base(outName)
+		outName = strings.ReplaceAll(outName, "\\", "_")
+		outName = strings.ReplaceAll(outName, "/", "_")
+		if !strings.EqualFold(filepath.Ext(outName), ".gif") {
+			writeJSON(w, http.StatusBadRequest, convertResponse{Error: "output must end in .gif"})
+			return
+		}
+		if outName == "." || outName == ".." || outName == "" {
+			writeJSON(w, http.StatusBadRequest, convertResponse{Error: "invalid output name"})
+			return
+		}
+	} else {
+		outName = convert.ArchiveStem(safe) + ".gif"
+	}
+
 	if err := os.MkdirAll(s.opts.UploadDir, 0o755); err != nil {
 		writeJSON(w, http.StatusInternalServerError, convertResponse{Error: "create upload dir: " + err.Error()})
 		return
 	}
 
+	// Serialize converts so same-name archives/outputs cannot race.
+	s.convertMu.Lock()
+	defer s.convertMu.Unlock()
+
 	archivePath := filepath.Join(s.opts.UploadDir, safe)
-	outPath := filepath.Join(s.opts.UploadDir, convert.ArchiveStem(safe)+".gif")
+	outPath := filepath.Join(s.opts.UploadDir, outName)
 
 	dst, err := os.Create(archivePath)
 	if err != nil {
@@ -237,6 +299,7 @@ func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 		DelayMS:  delayMS,
 		MaxWidth: maxWidth,
 		Loop:     loop,
+		Ctx:      r.Context(),
 		OnProgress: func(p convert.Progress) {
 			emit(convertResponse{
 				Type:  "progress",
@@ -248,6 +311,11 @@ func (s *Server) handleConvert(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || r.Context().Err() != nil {
+			_ = os.Remove(outPath)
+			emit(convertResponse{Type: "error", Error: "Conversion cancelled."})
+			return
+		}
 		emit(convertResponse{Type: "error", Error: convert.UserMessage(err)})
 		return
 	}
@@ -282,6 +350,92 @@ func (s *Server) handleGIF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/gif")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", name))
 	http.ServeContent(w, r, name, time.Time{}, f)
+}
+
+func (s *Server) checkCSRFToken(token string) error {
+	if token == "" {
+		return fmt.Errorf("missing CSRF token")
+	}
+	if subtle.ConstantTimeCompare([]byte(token), []byte(s.csrfToken)) != 1 {
+		return fmt.Errorf("invalid CSRF token")
+	}
+	return nil
+}
+
+func checkOriginReferer(r *http.Request, addr string) error {
+	if origin := r.Header.Get("Origin"); origin != "" {
+		if !originAllowed(origin, addr) {
+			return fmt.Errorf("forbidden origin")
+		}
+	}
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if !refererAllowed(ref, addr) {
+			return fmt.Errorf("forbidden referer")
+		}
+	}
+	return nil
+}
+
+func originAllowed(origin, addr string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return hostIsLoopback(u.Hostname()) || hostsMatch(u.Host, addr)
+}
+
+func refererAllowed(ref, addr string) bool {
+	u, err := url.Parse(ref)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return hostIsLoopback(u.Hostname()) || hostsMatch(u.Host, addr)
+}
+
+func hostsMatch(reqHost, addr string) bool {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return strings.EqualFold(reqHost, addr)
+	}
+	rh, rp, err := net.SplitHostPort(reqHost)
+	if err != nil {
+		return strings.EqualFold(reqHost, host) || strings.EqualFold(reqHost, "localhost")
+	}
+	if rp != "" && port != "" && rp != port {
+		return false
+	}
+	return hostIsLoopback(rh) || strings.EqualFold(rh, host)
+}
+
+func hostIsLoopback(host string) bool {
+	h := strings.TrimSpace(host)
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// ValidateListenAddr refuses non-loopback binds unless allowRemote is set.
+func ValidateListenAddr(addr string, allowRemote bool) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("listen address: %w", err)
+	}
+	if allowRemote {
+		return nil
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return fmt.Errorf("refusing non-loopback listen address %q (use 127.0.0.1 or pass --allow-remote)", addr)
+	}
+	if strings.EqualFold(host, "localhost") {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && ip.IsLoopback() {
+		return nil
+	}
+	return fmt.Errorf("refusing non-loopback listen address %q (use 127.0.0.1 or pass --allow-remote)", addr)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body convertResponse) {

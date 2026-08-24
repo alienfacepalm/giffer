@@ -39,12 +39,25 @@ func TestBundleCreatesApp(t *testing.T) {
 }
 
 func TestReadVersion(t *testing.T) {
-	dir := t.TempDir()
-	readme := filepath.Join(dir, "README.md")
-	if err := os.WriteFile(readme, []byte("**Release:** v9.8.7\n"), 0o644); err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"Release bold colon", "**Release:** v9.8.7\n", "9.8.7"},
+		{"Latest release link", "**Latest release: [v1.2.3](https://example.com/releases/latest)** — notes\n", "1.2.3"},
+		{"Current release link", "**Current release: [v4.5.6](https://example.com/releases/latest)** (platforms).\n", "4.5.6"},
 	}
-	if got := macosbundle.ReadVersion(readme); got != "9.8.7" {
-		t.Fatalf("version=%q want 9.8.7", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			readme := filepath.Join(dir, "README.md")
+			if err := os.WriteFile(readme, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if got := macosbundle.ReadVersion(readme); got != tc.want {
+				t.Fatalf("version=%q want %s", got, tc.want)
+			}
+		})
 	}
 }

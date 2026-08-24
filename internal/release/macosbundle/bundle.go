@@ -53,13 +53,17 @@ func Bundle(binPath, appPath, version string) error {
 	return os.WriteFile(plistPath, []byte(plist), 0o644)
 }
 
-// ReadVersion parses **Release:** vX.Y.Z from readmePath.
+// ReadVersion parses a semver from README release lines:
+//
+//	**Release:** vX.Y.Z
+//	**Latest release: [vX.Y.Z](...
+//	**Current release: [vX.Y.Z](...
 func ReadVersion(readmePath string) string {
 	data, err := os.ReadFile(readmePath)
 	if err != nil {
 		return "1.0.0"
 	}
-	re := regexp.MustCompile(`\*\*Release:\*\* v(\d+\.\d+\.\d+)`)
+	re := regexp.MustCompile(`(?i)\*\*(?:Release:|Latest release:|Current release:)(?:\*\*)?[^\n]*?\bv(\d+\.\d+\.\d+)\b`)
 	if m := re.FindSubmatch(data); len(m) == 2 {
 		return string(m[1])
 	}

@@ -73,7 +73,7 @@ func runWizardSteps(cmd *cobra.Command, in io.Reader, out io.Writer) error {
 		}
 		pending := 0
 		for _, j := range jobs {
-			if _, err := os.Stat(j.Output); errors.Is(err, os.ErrNotExist) {
+			if !shouldSkipExistingGIF(j.Output) {
 				pending++
 			}
 		}
@@ -181,9 +181,9 @@ func isTerminal(r io.Reader) bool {
 	return fileIsTerminal(f)
 }
 
-// shouldLaunchDesktop is true when giffer was started without a console (for
-// example double-clicking the release binary). Tests and piped stdin use
-// non-*os.File streams and fall through to batch mode instead.
+// shouldLaunchDesktop is true for double-click / GUI launches (no console on
+// Windows; non-TTY non-pipe stdio elsewhere). Piped stdin/stdout and test
+// non-*os.File streams stay in batch/wizard mode.
 func shouldLaunchDesktop(in io.Reader, out io.Writer) bool {
 	return guiLaunchPreferred(in, out)
 }

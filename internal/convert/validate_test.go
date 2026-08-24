@@ -1,7 +1,9 @@
 package convert
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"fmt"
 	"image/color"
 	"os"
@@ -89,6 +91,62 @@ func TestCheckPhotoSourceAcceptsPhotoZip(t *testing.T) {
 	if err := CheckPhotoSource(path); err != nil {
 		t.Fatalf("photo zip should pass: %v", err)
 	}
+}
+
+func TestCheckPhotoSourceRejectsAudioTarGz(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "songs.tar.gz")
+	if err := writeRawTarGz(path, map[string][]byte{
+		"track01.mp3": []byte("ID3fake-mp3-bytes"),
+		"notes.txt":   []byte("playlist"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	err := CheckPhotoSource(path)
+	if !IsNoImagesError(err) {
+		t.Fatalf("want no supported images via IsNoImagesError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "audio") {
+		t.Fatalf("want audio hint, got %q", err)
+	}
+}
+
+func TestIsNoImagesError(t *testing.T) {
+	if IsNoImagesError(nil) {
+		t.Fatal("nil should not match")
+	}
+	if !IsNoImagesError(fmt.Errorf("no supported images found in this zip - found 1 audio file")) {
+		t.Fatal("expected match")
+	}
+	if IsNoImagesError(fmt.Errorf("unreadable zip")) {
+		t.Fatal("should not match unrelated error")
+	}
+}
+
+func writeRawTarGz(path string, files map[string][]byte) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz := gzip.NewWriter(f)
+	defer gz.Close()
+	tw := tar.NewWriter(gz)
+	defer tw.Close()
+	for name, data := range files {
+		hdr := &tar.Header{
+			Name: name,
+			Mode: 0o644,
+			Size: int64(len(data)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if _, err := tw.Write(data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeRawZip(path string, files map[string][]byte) error {

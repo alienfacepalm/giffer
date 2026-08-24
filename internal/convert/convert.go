@@ -3,6 +3,7 @@ package convert
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/color/palette"
@@ -29,7 +30,8 @@ type Options struct {
 	DelayMS    int
 	MaxWidth   int // 0 = use first sorted frame's native width
 	Loop       int
-	OnProgress func(Progress) // optional; called as work advances
+	Ctx        context.Context // optional; cancel stops conversion when possible
+	OnProgress func(Progress)  // optional; called as work advances
 }
 
 // Progress is a conversion status update for UI / logging.
@@ -72,8 +74,36 @@ func overallPercent(stage string, done, total int) int {
 	}
 }
 
+func validateOptions(opts Options) error {
+	if opts.DelayMS <= 0 {
+		return fmt.Errorf("delay must be > 0 (got %d)", opts.DelayMS)
+	}
+	if opts.MaxWidth < 0 {
+		return fmt.Errorf("max-width must be >= 0 (got %d)", opts.MaxWidth)
+	}
+	if opts.Loop < 0 {
+		return fmt.Errorf("loop must be >= 0 (got %d)", opts.Loop)
+	}
+	return nil
+}
+
+func checkCtx(opts Options) error {
+	if opts.Ctx == nil {
+		return nil
+	}
+	select {
+	case <-opts.Ctx.Done():
+		return opts.Ctx.Err()
+	default:
+		return nil
+	}
+}
+
 // Convert reads images from a supported archive or directory and writes an animated GIF.
 func Convert(opts Options) error {
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	info, err := os.Stat(opts.Input)
 	if err != nil {
 		if IsArchive(opts.Input) {
@@ -93,6 +123,9 @@ func Convert(opts Options) error {
 
 // ZipToGIF reads images from a zip archive and writes an animated GIF.
 func ZipToGIF(opts Options) error {
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	zr, err := zip.OpenReader(opts.Input)
 	if err != nil {
 		return fmt.Errorf("unreadable zip: %w - re-zip your photos as a standard .zip and try again", err)
@@ -104,18 +137,32 @@ func ZipToGIF(opts Options) error {
 		return noImagesError("zip", summarizeZipNames(zr.File))
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return strings.ToLower(entries[i].base) < strings.ToLower(entries[j].base)
+	sort.SliceStable(entries, func(i, j int) bool {
+		bi := strings.ToLower(entries[i].base)
+		bj := strings.ToLower(entries[j].base)
+		if bi != bj {
+			return bi < bj
+		}
+		return strings.ToLower(entries[i].name) < strings.ToLower(entries[j].name)
 	})
 
-	frames := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
+	frames, err := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
 		return decodeZipImage(entries[i].file)
 	})
+	if err != nil {
+		return err
+	}
+	if err := checkCtx(opts); err != nil {
+		return err
+	}
 	return writeGIF(opts, frames)
 }
 
 // DirToGIF reads images from a directory (recursively) and writes an animated GIF.
 func DirToGIF(opts Options) error {
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	entries, err := collectDirImageEntries(opts.Input)
 	if err != nil {
 		return err
@@ -128,13 +175,24 @@ func DirToGIF(opts Options) error {
 		return noImagesError("folder", st)
 	}
 
-	sort.Slice(entries, func(i, j int) bool {
-		return strings.ToLower(entries[i].base) < strings.ToLower(entries[j].base)
+	sort.SliceStable(entries, func(i, j int) bool {
+		bi := strings.ToLower(entries[i].base)
+		bj := strings.ToLower(entries[j].base)
+		if bi != bj {
+			return bi < bj
+		}
+		return strings.ToLower(entries[i].path) < strings.ToLower(entries[j].path)
 	})
 
-	frames := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
+	frames, err := decodeEntriesParallel(opts, len(entries), func(i int) (image.Image, error) {
 		return decodeFileImage(entries[i].path)
 	})
+	if err != nil {
+		return err
+	}
+	if err := checkCtx(opts); err != nil {
+		return err
+	}
 	return writeGIF(opts, frames)
 }
 
@@ -145,6 +203,9 @@ func HasImages(dir string) bool {
 }
 
 func writeGIF(opts Options, frames []image.Image) error {
+	if err := validateOptions(opts); err != nil {
+		return err
+	}
 	if len(frames) == 0 {
 		return fmt.Errorf("no usable image frames: files looked like photos but could not be decoded - use real %s images and try again", imageKindsHelp)
 	}
@@ -163,7 +224,14 @@ func writeGIF(opts Options, frames []image.Image) error {
 		}
 	}
 
-	paletted := encodeFramesParallel(opts, frames, maxWidth)
+	paletted, err := encodeFramesParallel(opts, frames, maxWidth)
+	if err != nil {
+		return err
+	}
+	if err := checkCtx(opts); err != nil {
+		return err
+	}
+
 	delays := make([]int, len(paletted))
 	for i := range delays {
 		delays[i] = delayCS
@@ -178,20 +246,44 @@ func writeGIF(opts Options, frames []image.Image) error {
 		Config: image.Config{Width: screenW, Height: screenH},
 	}
 
-	if err := os.MkdirAll(filepath.Dir(opts.Output), 0o755); err != nil {
+	dir := filepath.Dir(opts.Output)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("could not create output folder for %q: %w - pick a writable --output path and try again", opts.Output, err)
 	}
 
+	if err := checkCtx(opts); err != nil {
+		return err
+	}
+
 	report(opts, "writing", 0, 1)
-	f, err := os.Create(opts.Output)
+	tmp, err := os.CreateTemp(dir, "giffer-*.gif")
 	if err != nil {
 		return fmt.Errorf("could not write %q: %w - free disk space or pick another --output path and try again", opts.Output, err)
 	}
-	defer f.Close()
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		_ = tmp.Close()
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
 
-	if err := gif.EncodeAll(f, out); err != nil {
+	if err := gif.EncodeAll(tmp, out); err != nil {
 		return encodeGIFError(err)
 	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("could not write %q: %w - free disk space or pick another --output path and try again", opts.Output, err)
+	}
+
+	if err := checkCtx(opts); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpName, opts.Output); err != nil {
+		return fmt.Errorf("could not write %q: %w - free disk space or pick another --output path and try again", opts.Output, err)
+	}
+	cleanup = false
 	report(opts, "writing", 1, 1)
 	return nil
 }
@@ -234,6 +326,7 @@ func encodeGIFError(err error) error {
 
 type zipImage struct {
 	file *zip.File
+	name string // zip entry name (full path within archive)
 	base string
 }
 
@@ -256,7 +349,7 @@ func collectZipImageEntries(files []*zip.File) []zipImage {
 		if !isSupportedImage(base) {
 			continue
 		}
-		out = append(out, zipImage{file: f, base: base})
+		out = append(out, zipImage{file: f, name: name, base: base})
 	}
 	return out
 }
@@ -344,9 +437,13 @@ func decodeFileImage(path string) (image.Image, error) {
 }
 
 func decodeImage(r io.Reader) (image.Image, error) {
-	data, err := io.ReadAll(r)
+	limited := io.LimitReader(r, MaxEntryBytes+1)
+	data, err := io.ReadAll(limited)
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(data)) > MaxEntryBytes {
+		return nil, fmt.Errorf("image exceeds size limit")
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {

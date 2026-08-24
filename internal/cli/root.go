@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"image/gif"
 	"io"
 	"os"
 	"path/filepath"
@@ -139,12 +140,10 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 	skipped := 0
 
 	for _, j := range jobs {
-		if _, err := os.Stat(j.Output); err == nil {
+		if shouldSkipExistingGIF(j.Output) {
 			printSkip(stdout, j.Output)
 			skipped++
 			continue
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("check output path %s: %w", j.Output, err)
 		}
 		toRun = append(toRun, j)
 	}
@@ -156,7 +155,12 @@ func runBatch(cmd *cobra.Command, uploadDir string, delayMS, maxWidth, loop int)
 		return nil
 	}
 
+	// Cap batch parallelism: each job already parallelizes frame decode/encode
+	// up to GOMAXPROCS, so many concurrent jobs spike memory badly.
 	workers := runtime.GOMAXPROCS(0)
+	if workers > 2 {
+		workers = 2
+	}
 	if workers < 1 {
 		workers = 1
 	}
@@ -232,6 +236,9 @@ func discoverUploadJobs(uploadDir string) ([]batchJob, error) {
 		}
 
 		if convert.IsArchive(name) {
+			if err := convert.CheckPhotoSource(full); convert.IsNoImagesError(err) {
+				continue // ignore empty archives like empty dirs
+			}
 			stem := convert.ArchiveStem(name)
 			addJob(full, filepath.Join(uploadDir, stem+".gif"))
 			continue
@@ -250,6 +257,25 @@ func discoverUploadJobs(uploadDir string) ([]batchJob, error) {
 		return nil, fmt.Errorf("output collision: %s", strings.Join(collisions, "; "))
 	}
 	return jobs, nil
+}
+
+// shouldSkipExistingGIF is true when path already holds a usable GIF so batch
+// mode can leave it alone. Tiny or undecodable leftovers are not skipped.
+func shouldSkipExistingGIF(path string) bool {
+	st, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	if st.Size() < 32 { // tiny/empty/corrupt leftovers
+		return false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	_, err = gif.DecodeConfig(f)
+	return err == nil
 }
 
 func validateTunables(delayMS, maxWidth, loop int) error {

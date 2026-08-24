@@ -351,7 +351,7 @@ body {
 }
 
 button#go,
-button#reset {
+button#reset-btn {
   margin: 0;
   font-family: var(--display);
   font-weight: 700;
@@ -379,20 +379,20 @@ button#go:disabled {
   cursor: wait;
 }
 
-button#reset {
+button#reset-btn {
   border: 1px solid var(--field-border);
   background: transparent;
   color: var(--muted);
   padding-inline: 1rem;
 }
 
-button#reset:hover:not(:disabled) {
+button#reset-btn:hover:not(:disabled) {
   color: var(--ink);
   border-color: var(--ink);
   transform: translateY(-1px);
 }
 
-button#reset:disabled {
+button#reset-btn:disabled {
   opacity: 0.45;
   cursor: wait;
 }
@@ -474,27 +474,27 @@ button#reset:disabled {
   height: 100%;
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 0.5rem;
+  grid-template-rows: minmax(0, 1fr);
   align-content: stretch;
   justify-items: stretch;
-  padding: clamp(0.6rem, 1.5vh, 0.9rem);
+  padding: 0;
   border: 1px solid var(--field-border);
-  background: var(--preview-bg);
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 35%, rgba(255, 77, 26, 0.07) 0%, transparent 60%),
+    var(--preview-bg);
   overflow: hidden;
 }
 
 .result.is-empty {
   place-items: center;
-  grid-template-rows: 1fr;
 }
 
 .result.is-forging {
   place-items: stretch;
-  grid-template-rows: 1fr;
 }
 
-.result.is-forging .result-empty {
+.result.is-forging .result-empty,
+.result.is-forging .result-stage {
   display: none;
 }
 
@@ -537,14 +537,43 @@ button#reset:disabled {
 
 .result-empty {
   margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  padding: 1.25rem;
+  text-align: center;
   color: var(--preview-muted);
-  font-size: clamp(0.75rem, 1.6vh, 0.9rem);
-  letter-spacing: 0.04em;
-  text-transform: lowercase;
 }
 
-.result.is-empty #preview,
-.result.is-empty #download {
+.result-empty-mark {
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-bottom: 0.35rem;
+  border: 1.5px dashed var(--preview-muted);
+  opacity: 0.55;
+  background:
+    linear-gradient(var(--preview-muted), var(--preview-muted)) center / 40% 1.5px no-repeat,
+    linear-gradient(var(--preview-muted), var(--preview-muted)) center / 1.5px 40% no-repeat;
+}
+
+.result-empty-title {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(0.95rem, 2vh, 1.15rem);
+  letter-spacing: -0.03em;
+  color: var(--preview-ink);
+}
+
+.result-empty-hint {
+  margin: 0;
+  font-size: clamp(0.7rem, 1.4vh, 0.8rem);
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  color: var(--preview-muted);
+}
+
+.result.is-empty .result-stage {
   display: none;
 }
 
@@ -556,6 +585,68 @@ button#reset:disabled {
   display: none;
 }
 
+.result-stage {
+  min-height: 0;
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.result-stage[hidden] {
+  display: none;
+}
+
+.result.is-ready .result-stage {
+  animation: result-reveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes result-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .result-stage {
+    opacity: 1;
+    transform: none;
+  }
+
+  .result.is-ready .result-stage {
+    animation: none;
+  }
+
+  .download-btn,
+  .download-btn:hover,
+  .download-btn:focus-visible,
+  .download-btn:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+.result-media {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(0.65rem, 1.6vh, 1rem);
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      rgba(255, 255, 255, 0.03) 0deg 90deg,
+      transparent 90deg 180deg
+    )
+    0 0 / 16px 16px;
+}
+
+.result-media img,
 .result img {
   min-height: 0;
   width: 100%;
@@ -563,15 +654,99 @@ button#reset:disabled {
   max-height: 100%;
   object-fit: contain;
   justify-self: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-.result a {
+.result-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem clamp(0.75rem, 1.5vw, 1rem);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 70%),
+    rgba(0, 0, 0, 0.35);
+}
+
+.result-meta {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.result-meta-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.result-filename {
+  font-size: 0.78rem;
   color: var(--preview-ink);
-  font-size: 0.8rem;
-  justify-self: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(100%, 18rem);
 }
 
-.credit {
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.65rem 1.15rem;
+  border: 0;
+  text-decoration: none;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(0.85rem, 1.8vh, 0.98rem);
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.download-btn:hover,
+.download-btn:focus-visible {
+  background: #ff6538;
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 77, 26, 0.35);
+  outline: none;
+}
+
+.download-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.download-btn:active {
+  transform: translateY(0);
+}
+
+.download-icon {
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .result-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .result-filename {
+    max-width: 100%;
+  }
+
+  .download-btn {
+    width: 100%;
+  }
+}
   justify-self: center;
   flex-shrink: 0;
   padding-top: 0.15rem;
@@ -702,7 +877,7 @@ button#reset:disabled {
   }
 
   button#go,
-  button#reset {
+  button#reset-btn {
     padding: 0.7rem 1.25rem;
   }
 

@@ -25,7 +25,7 @@ Turn a **series of photos** (zip or folder) into an animated GIF.
 
 > Window won't open? Run once: `sudo apt install libwebkit2gtk-4.1-0`
 
-GIF output lands in an `upload/` folder next to the app. Supported inputs: `.zip`, `.tar.gz`, `.7z`, and image folders.
+GIF output lands in an `upload/` folder next to the app. Supported inputs: `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2` / `.tbz`, `.tar.xz` / `.txz`, `.7z`, `.rar`, and image folders.
 
 ---
 
@@ -73,7 +73,7 @@ With **no flags** in a terminal, `./giffer` opens the wizard. **Double-click** (
 | `--max-width` | `0` | max width; `0` = first photo width |
 | `--loop` | `0` | `0` = loop forever |
 
-**Supported archives:** `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2`, `.tar.xz` / `.txz`, `.7z`
+**Supported archives:** `.zip`, `.tar`, `.tar.gz` / `.tgz`, `.tar.bz2` / `.tbz2` / `.tbz`, `.tar.xz` / `.txz`, `.7z`, `.rar`
 
 ---
 
@@ -83,8 +83,9 @@ The UI runs in a native window on `http://127.0.0.1:8765` internally. Drop a pho
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--addr` | `127.0.0.1:8765` | listen address (fixed) |
+| `--addr` | `127.0.0.1:8765` | listen address (loopback only unless `--allow-remote`) |
 | `--upload-dir` | beside the binary | uploads and GIF output |
+| `--allow-remote` | off | allow non-loopback `--addr` (exposes the convert API) |
 
 | OS | One-time requirement |
 |----|---------------------|

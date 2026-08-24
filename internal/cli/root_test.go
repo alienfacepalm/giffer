@@ -178,7 +178,7 @@ func TestRunBatch(t *testing.T) {
 	}
 
 	existing := filepath.Join(upload, "done.gif")
-	if err := os.WriteFile(existing, []byte("gif"), 0o644); err != nil {
+	if err := writeMinimalGIF(existing); err != nil {
 		t.Fatal(err)
 	}
 	doneZip := filepath.Join(upload, "done.zip")
@@ -444,6 +444,18 @@ func TestDiscoverUploadJobs(t *testing.T) {
 	if err := writePNGFile(filepath.Join(sub, "y.png"), 10, 10); err != nil {
 		t.Fatal(err)
 	}
+	// Empty archive (no images) should be ignored like an empty directory.
+	emptyZip := filepath.Join(dir, "empty.zip")
+	f, err := os.Create(emptyZip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zw := zip.NewWriter(f)
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
 	jobs, err := discoverUploadJobs(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -490,4 +502,14 @@ func writePNGFile(path string, w, h int) error {
 		}
 	}
 	return png.Encode(f, img)
+}
+
+func writeMinimalGIF(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	img := image.NewPaletted(image.Rect(0, 0, 2, 2), color.Palette{color.Black, color.White})
+	return gif.Encode(f, img, nil)
 }

@@ -101,6 +101,9 @@
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const baseY = new Float32Array(count);
+    for (let i = 0; i < count; i++) baseY[i] = positions[i * 3 + 1];
+    geo.setAttribute("baseY", new THREE.BufferAttribute(baseY, 1));
     geo.setAttribute("seed", new THREE.BufferAttribute(seeds, 1));
     const mat = new THREE.PointsMaterial({
       color,
@@ -161,10 +164,12 @@
       cloud.rotation.y = t * (0.15 + ci * 0.08) * energy;
       const pos = cloud.geometry.attributes.position;
       const seeds = cloud.geometry.attributes.seed;
+      const baseY = cloud.geometry.attributes.baseY;
       for (let i = 0; i < pos.count; i++) {
         const seed = seeds.getX(i);
         const wobble = Math.sin(t * (1.2 + ci) + seed) * 0.012 * energy;
-        pos.setY(i, pos.getY(i) + wobble * 0.15);
+        const y0 = baseY ? baseY.getX(i) : pos.getY(i);
+        pos.setY(i, y0 + wobble * 0.15);
       }
       pos.needsUpdate = true;
       if (cloud.material) {
@@ -291,7 +296,7 @@
 
     running = true;
     mount.classList.add("is-live");
-    setCaption("Conjuring frames…");
+    setCaption("Converting…");
     animId = requestAnimationFrame(tick);
   }
 
@@ -300,10 +305,10 @@
     progress = Math.max(0, Math.min(1, (Number.isFinite(n) ? n : 0) / 100));
     if (label != null && String(label) !== "" && String(label) !== "undefined") {
       setCaption(label);
-    } else if (progress >= 0.95) setCaption("Sealing the GIF…");
-    else if (progress >= 0.55) setCaption("Weaving motion…");
-    else if (progress >= 0.15) setCaption("Gathering frames…");
-    else setCaption("Conjuring frames…");
+    } else if (progress >= 0.95) setCaption("Writing GIF…");
+    else if (progress >= 0.55) setCaption("Encoding…");
+    else if (progress >= 0.15) setCaption("Reading frames…");
+    else setCaption("Converting…");
   }
 
   function stop() {

@@ -1,5 +1,7 @@
 package main
 
+//go:generate go run ../../scripts/makeico ../..
+
 import (
 	"os"
 

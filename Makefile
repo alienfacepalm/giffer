@@ -1,4 +1,4 @@
-.PHONY: check test vet fmt build build-gui tidy release
+.PHONY: check test vet fmt build build-gui tidy release icon
 
 check: tidy fmt vet test
 
@@ -13,6 +13,11 @@ vet:
 
 test:
 	go test ./...
+
+# Rebuild assets/giffer.ico and Windows .syso icon resources from assets/giffer-icon.png.
+# Requires: go install github.com/akavel/rsrc@latest
+icon:
+	go run ./scripts/makeico
 
 # Local dev binary (console on Windows so logs and wizard stay visible).
 build:

@@ -15,8 +15,7 @@ import (
 
 const gifferHeader = "X-Giffer"
 
-// openWindowFunc opens the UI in a native window (desktop builds) or the
-// system browser (non-desktop builds). Overridable in tests.
+// openWindowFunc opens the UI in a native window. Overridable in tests.
 var openWindowFunc = openDesktopWindow
 
 // SetOpenWindowForTest replaces the window opener. Pass nil to restore.
@@ -29,15 +28,18 @@ func SetOpenWindowForTest(fn func(url string) error) {
 }
 
 // Run starts the UI on opts.Addr (never remaps to another port), opens a native
-// window (or the system browser without the desktop build tag) on the main
-// thread, and blocks until the window closes. If the address is already in use,
-// it kills the listener and takes over that port — never remaps to a different one.
+// window on the main thread, and blocks until the window closes. If the address
+// is already in use by another giffer UI, it reclaims that port — never remaps
+// to a different one.
 func Run(opts Options, stdout io.Writer) error {
 	if strings.TrimSpace(opts.UploadDir) == "" {
 		opts.UploadDir = DefaultUploadDir()
 	}
 	if strings.TrimSpace(opts.Addr) == "" {
 		opts.Addr = "127.0.0.1:8765"
+	}
+	if err := ValidateListenAddr(opts.Addr, opts.AllowRemote); err != nil {
+		return err
 	}
 
 	url := httpURL(opts.Addr)
@@ -46,7 +48,7 @@ func Run(opts Options, stdout io.Writer) error {
 		if !isAddrInUse(err) {
 			return err
 		}
-		// Port is taken — never bind a different one; reclaim it.
+		// Port is taken — never bind a different one; reclaim only a prior giffer.
 		fmt.Fprintf(stdout, "♻️  giffer ui reclaiming %s\n", opts.Addr)
 		if freeErr := freePortFunc(opts.Addr); freeErr != nil {
 			return fmt.Errorf("reclaim %s: %w", opts.Addr, freeErr)
@@ -140,9 +142,5 @@ func Probe(url string) bool {
 		return false
 	}
 	defer res.Body.Close()
-	if res.Header.Get(gifferHeader) == "1" {
-		return true
-	}
-	body, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-	return strings.Contains(strings.ToLower(string(body)), "giffer")
+	return res.Header.Get(gifferHeader) == "1"
 }

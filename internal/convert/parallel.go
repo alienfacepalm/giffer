@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"fmt"
 	"image"
 	"runtime"
 	"sync"
@@ -54,45 +55,75 @@ func forParallel(n int, fn func(i int)) {
 	wg.Wait()
 }
 
-// decodeEntriesParallel decodes entries in parallel, preserving input order
-// and skipping failures (same semantics as the sequential path).
-func decodeEntriesParallel(opts Options, n int, decode func(i int) (image.Image, error)) []image.Image {
-	type slot struct {
-		img image.Image
-		ok  bool
+// decodeEntriesParallel decodes entries in parallel, preserving input order.
+// If any decode fails (or the optional context is canceled), it returns an
+// error naming the first failure — failures are never silently dropped.
+func decodeEntriesParallel(opts Options, n int, decode func(i int) (image.Image, error)) ([]image.Image, error) {
+	if n == 0 {
+		return nil, nil
 	}
-	slots := make([]slot, n)
-	var done atomic.Int32
-	var progMu sync.Mutex
+	slots := make([]image.Image, n)
+	var (
+		done     atomic.Int32
+		failN    atomic.Int32
+		once     sync.Once
+		firstErr error
+		progMu   sync.Mutex
+	)
 
 	forParallel(n, func(i int) {
-		img, err := decode(i)
-		if err == nil && img != nil {
-			slots[i] = slot{img: img, ok: true}
+		if err := checkCtx(opts); err != nil {
+			once.Do(func() { firstErr = err })
+			return
 		}
+		img, err := decode(i)
+		if err != nil {
+			failN.Add(1)
+			once.Do(func() { firstErr = err })
+			return
+		}
+		if img == nil {
+			failN.Add(1)
+			once.Do(func() { firstErr = fmt.Errorf("decoded nil image") })
+			return
+		}
+		slots[i] = img
 		d := int(done.Add(1))
 		progMu.Lock()
 		report(opts, "reading", d, n)
 		progMu.Unlock()
 	})
 
-	frames := make([]image.Image, 0, n)
-	for _, s := range slots {
-		if s.ok {
-			frames = append(frames, s.img)
+	if firstErr != nil {
+		if err := checkCtx(opts); err != nil {
+			return nil, err
 		}
+		failed := int(failN.Load())
+		if failed < 1 {
+			failed = 1
+		}
+		return nil, fmt.Errorf("could not decode image frames: %d of %d failed: %w", failed, n, firstErr)
 	}
-	return frames
+	return slots, nil
 }
 
 // encodeFramesParallel resizes and quantizes frames in parallel, preserving order.
-func encodeFramesParallel(opts Options, frames []image.Image, maxWidth int) []*image.Paletted {
+// Aborts early if opts.Ctx is canceled.
+func encodeFramesParallel(opts Options, frames []image.Image, maxWidth int) ([]*image.Paletted, error) {
 	n := len(frames)
 	out := make([]*image.Paletted, n)
-	var done atomic.Int32
-	var progMu sync.Mutex
+	var (
+		done     atomic.Int32
+		once     sync.Once
+		firstErr error
+		progMu   sync.Mutex
+	)
 
 	forParallel(n, func(i int) {
+		if err := checkCtx(opts); err != nil {
+			once.Do(func() { firstErr = err })
+			return
+		}
 		resized := resizeMaxWidth(frames[i], maxWidth)
 		out[i] = quantize(resized)
 		d := int(done.Add(1))
@@ -100,5 +131,9 @@ func encodeFramesParallel(opts Options, frames []image.Image, maxWidth int) []*i
 		report(opts, "encoding", d, n)
 		progMu.Unlock()
 	})
-	return out
+
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return out, nil
 }

@@ -49,7 +49,7 @@ func TestIndexAndAssets(t *testing.T) {
 	indexBody, _ := io.ReadAll(indexRes.Body)
 	indexRes.Body.Close()
 	html := string(indexBody)
-	if !strings.Contains(html, "alienfacepalm.com") || !strings.Contains(html, "an AlienFacepalm joint") {
+	if !strings.Contains(html, "alienfacepalm.com") || !strings.Contains(html, "AlienFacepalm") {
 		t.Fatal("index missing AlienFacepalm footer credit")
 	}
 	if !strings.Contains(html, "/afp-mark.png") {
@@ -66,8 +66,14 @@ func TestIndexAndAssets(t *testing.T) {
 	if !strings.Contains(html, `id="forge"`) {
 		t.Fatal("index missing forge mount for generating animation")
 	}
-	if !strings.Contains(html, `id="reset"`) {
+	if !strings.Contains(html, `id="reset-btn"`) {
 		t.Fatal("index missing Reset control to restore baseline")
+	}
+	if !strings.Contains(html, `name="giffer-csrf"`) || !strings.Contains(html, srv.CSRFToken()) {
+		t.Fatal("index missing CSRF meta token")
+	}
+	if !strings.Contains(html, `id="output"`) {
+		t.Fatal("index missing optional output filename field")
 	}
 
 	cssRes, err := http.Get(ts.URL + "/app.css")
@@ -105,6 +111,24 @@ func TestIndexAndAssets(t *testing.T) {
 	if !strings.Contains(string(jsBody), "resetToBaseline") {
 		t.Fatal("app.js missing resetToBaseline for clearing UI state")
 	}
+	if !strings.Contains(string(jsBody), "HTMLFormElement.prototype.reset") {
+		t.Fatal("app.js must call HTMLFormElement.prototype.reset (id=reset shadows form.reset)")
+	}
+}
+
+func postConvert(t *testing.T, ts *httptest.Server, srv *ui.Server, contentType string, body io.Reader) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/convert", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("X-Giffer-CSRF", srv.CSRFToken())
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
 }
 
 func TestConvertAPI(t *testing.T) {
@@ -130,10 +154,7 @@ func TestConvertAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := http.Post(ts.URL+"/api/convert", w.FormDataContentType(), &body)
-	if err != nil {
-		t.Fatal(err)
-	}
+	res := postConvert(t, ts, srv, w.FormDataContentType(), &body)
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("status=%d", res.StatusCode)
@@ -230,13 +251,25 @@ func TestConvertAPIValidation(t *testing.T) {
 		w := multipart.NewWriter(&body)
 		_ = w.WriteField("delay-ms", "500")
 		_ = w.Close()
+		res := postConvert(t, ts, srv, w.FormDataContentType(), &body)
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusBadRequest {
+			t.Fatalf("status=%d", res.StatusCode)
+		}
+	})
+
+	t.Run("missing csrf", func(t *testing.T) {
+		var body bytes.Buffer
+		w := multipart.NewWriter(&body)
+		_ = w.WriteField("delay-ms", "500")
+		_ = w.Close()
 		res, err := http.Post(ts.URL+"/api/convert", w.FormDataContentType(), &body)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer res.Body.Close()
-		if res.StatusCode != http.StatusBadRequest {
-			t.Fatalf("status=%d", res.StatusCode)
+		if res.StatusCode != http.StatusForbidden {
+			t.Fatalf("status=%d want forbidden", res.StatusCode)
 		}
 	})
 
@@ -248,10 +281,7 @@ func TestConvertAPIValidation(t *testing.T) {
 		_, _ = fw.Write(zipBytes)
 		_ = w.WriteField("delay-ms", "0")
 		_ = w.Close()
-		res, err := http.Post(ts.URL+"/api/convert", w.FormDataContentType(), &body)
-		if err != nil {
-			t.Fatal(err)
-		}
+		res := postConvert(t, ts, srv, w.FormDataContentType(), &body)
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status=%d", res.StatusCode)
@@ -288,10 +318,7 @@ func TestConvertAPIValidation(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		res, err := http.Post(ts.URL+"/api/convert", w.FormDataContentType(), &body)
-		if err != nil {
-			t.Fatal(err)
-		}
+		res := postConvert(t, ts, srv, w.FormDataContentType(), &body)
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status=%d body=%s", res.StatusCode, readBody(t, res))
@@ -319,10 +346,7 @@ func TestConvertAPIValidation(t *testing.T) {
 		if err := w.Close(); err != nil {
 			t.Fatal(err)
 		}
-		res, err := http.Post(ts.URL+"/api/convert", w.FormDataContentType(), &body)
-		if err != nil {
-			t.Fatal(err)
-		}
+		res := postConvert(t, ts, srv, w.FormDataContentType(), &body)
 		defer res.Body.Close()
 		if res.StatusCode != http.StatusBadRequest {
 			t.Fatalf("status=%d", res.StatusCode)

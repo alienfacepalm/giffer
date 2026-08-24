@@ -47,7 +47,7 @@ Your GIF saves in an `upload/` folder next to the binary.
 
 ## Supported photo inputs
 
-`.zip`, `.tar`, `.tar.gz`, `.7z`, and folders of `.jpg` / `.png` / `.webp` images.
+`.zip`, `.tar`, `.tar.gz`, `.7z`, `.rar`, and folders of `.jpg` / `.png` / `.webp` images.
 
 ---
 

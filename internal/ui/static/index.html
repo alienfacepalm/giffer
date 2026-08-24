@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <title>giffer</title>
+  <meta name="giffer-csrf" content="{{CSRF_TOKEN}}" />
   <script>
     /* Apply contrast before paint so brand text is readable on first frame. */
     (function () {
@@ -18,10 +19,6 @@
   <div class="stage">
     <header class="brand">
       <p class="mark">giffer</p>
-      <div class="brand-copy">
-        <h1>Photos in. Motion out.</h1>
-        <p class="lede">Drop an archive of photos in order — we stitch the series into one animated GIF.</p>
-      </div>
     </header>
 
     <main class="workspace">
@@ -32,11 +29,11 @@
               id="file"
               name="file"
               type="file"
-              accept=".zip,.tar,.tgz,.tar.gz,.tbz2,.tbz,.tar.bz2,.txz,.tar.xz,.7z,application/zip,application/x-tar,application/gzip,application/x-bzip2,application/x-xz,application/x-7z-compressed"
+              accept=".zip,.tar,.tgz,.tar.gz,.tbz2,.tbz,.tar.bz2,.txz,.tar.xz,.7z,.rar,application/zip,application/x-tar,application/gzip,application/x-bzip2,application/x-xz,application/x-7z-compressed,application/vnd.rar,application/x-rar-compressed"
               required
             />
-            <span class="drop-title" id="drop-label">Drop a photo archive</span>
-            <span class="drop-hint">zip of JPEG/PNG/WebP/GIF photos in order — not audio or other files</span>
+            <span class="drop-title" id="drop-label">Photo archive</span>
+            <span class="drop-hint">Ordered JPEG, PNG, WebP, or GIF images in zip/tar/7z/rar</span>
             <ul class="formats" aria-label="Supported archive formats">
               <li>zip</li>
               <li>tar.gz</li>
@@ -44,6 +41,7 @@
               <li>tar.xz</li>
               <li>tar</li>
               <li>7z</li>
+              <li>rar</li>
             </ul>
           </label>
 
@@ -60,6 +58,10 @@
               <span>loop (0=forever)</span>
               <input id="loop" name="loop" type="number" min="0" step="1" value="0" title="0 = loop forever" />
             </label>
+            <label>
+              <span>output (.gif)</span>
+              <input id="output" name="output" type="text" value="" placeholder="auto from archive name" title="Optional output filename ending in .gif" autocomplete="off" />
+            </label>
           </div>
 
           <div class="progress" id="progress" hidden>
@@ -74,7 +76,7 @@
 
           <div class="actions">
             <button type="submit" id="go">Convert</button>
-            <button type="button" id="reset" title="Clear file, preview, and restore default settings">Reset</button>
+            <button type="button" id="reset-btn" title="Clear file, preview, and restore default settings">Reset</button>
           </div>
         </form>
       </section>
@@ -83,11 +85,30 @@
         <figure class="result is-empty" id="result">
           <div class="forge" id="forge" hidden aria-hidden="true">
             <canvas class="forge-canvas" id="forge-canvas"></canvas>
-            <p class="forge-caption" id="forge-caption">Conjuring frames…</p>
+            <p class="forge-caption" id="forge-caption">Converting…</p>
           </div>
-          <p class="result-empty" id="result-empty">GIF shows here</p>
-          <img id="preview" alt="Converted GIF preview" hidden />
-          <a id="download" download hidden>Download GIF</a>
+          <div class="result-empty" id="result-empty">
+            <span class="result-empty-mark" aria-hidden="true"></span>
+            <p class="result-empty-title">No output</p>
+            <p class="result-empty-hint">Convert an archive to preview the GIF</p>
+          </div>
+          <div class="result-stage" id="result-stage" hidden>
+            <div class="result-media">
+              <img id="preview" alt="Converted GIF preview" hidden />
+            </div>
+            <div class="result-bar">
+              <div class="result-meta">
+                <span class="result-meta-label">Output</span>
+                <span class="result-filename" id="result-filename"></span>
+              </div>
+              <a class="download-btn" id="download" download hidden>
+                <svg class="download-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M8 1.5a.75.75 0 0 1 .75.75v6.19l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06l2.22 2.22V2.25A.75.75 0 0 1 8 1.5ZM2.75 12a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75Z"/>
+                </svg>
+                <span>Download GIF</span>
+              </a>
+            </div>
+          </div>
         </figure>
       </section>
     </main>
@@ -95,7 +116,7 @@
     <footer class="credit">
       <a class="credit-link" href="http://alienfacepalm.com/" target="_blank" rel="noopener noreferrer">
         <img class="credit-mark" src="/afp-mark.png" alt="" width="28" height="28" />
-        <span class="credit-copy">an AlienFacepalm joint</span>
+        <span class="credit-copy">AlienFacepalm</span>
       </a>
     </footer>
   </div>

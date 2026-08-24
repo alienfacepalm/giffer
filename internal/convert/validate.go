@@ -28,7 +28,8 @@ type contentStats struct {
 }
 
 // CheckPhotoSource verifies path looks like a usable photo archive or folder
-// before conversion. Zip is inspected in place; other archives are left to Convert.
+// before conversion. Zip is inspected in place; other archives are extracted
+// to a temp dir (with the same size limits as Convert) then summarized.
 func CheckPhotoSource(path string) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -54,6 +55,32 @@ func CheckPhotoSource(path string) error {
 	}
 	if archiveKind(path) == "zip" {
 		return checkZipHasPhotos(path)
+	}
+	return checkArchiveHasPhotos(path)
+}
+
+// IsNoImagesError reports whether err is a "no supported images" failure.
+func IsNoImagesError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no supported images")
+}
+
+func checkArchiveHasPhotos(archivePath string) error {
+	kind := archiveKind(archivePath)
+	tmp, err := os.MkdirTemp("", "giffer-check-*")
+	if err != nil {
+		return fmt.Errorf("create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmp)
+
+	if err := extractArchive(archivePath, kind, tmp); err != nil {
+		return err
+	}
+	st, err := summarizeDir(tmp)
+	if err != nil {
+		return err
+	}
+	if st.images == 0 {
+		return noImagesError("archive", st)
 	}
 	return nil
 }
@@ -232,7 +259,7 @@ func UserMessage(err error) string {
 	switch {
 	case strings.Contains(msg, "no supported images"):
 		return msg
-	case strings.Contains(msg, "no usable image frames"):
+	case strings.Contains(msg, "could not decode image frames"), strings.Contains(msg, "no usable image frames"):
 		return "Photos in the archive could not be decoded. Use real " + imageKindsHelp +
 			" files (not renamed audio/video), then try again"
 	case strings.Contains(msg, "out of bounds"), strings.Contains(msg, "do not fit one canvas"):
@@ -241,7 +268,9 @@ func UserMessage(err error) string {
 		return "Photos are too large for GIF (each side must be under 65536px). Lower --max-width and try again"
 	case strings.Contains(msg, "could not encode GIF"):
 		return msg
-	case strings.Contains(msg, "unreadable zip"), strings.Contains(msg, "unreadable archive"):
+	case strings.Contains(msg, "unreadable zip"), strings.Contains(msg, "unreadable archive"),
+		strings.Contains(msg, "unreadable rar"), strings.Contains(msg, "unreadable 7z"),
+		strings.Contains(msg, "unreadable tar"):
 		if strings.Contains(msg, "try again") {
 			return msg
 		}

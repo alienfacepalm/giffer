@@ -23,22 +23,46 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             gcc \
-            libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
             gcc-mingw-w64-x86-64 \
             gcc-mingw-w64-i686
 
-      - name: Build Linux and Windows release binaries
-        run: make release
+      - name: Build Windows and Linux amd64
+        run: go run ./scripts/release windows/amd64 windows/386 linux/amd64
 
-      - name: Upload Linux and Windows binaries
+      - name: Upload Linux amd64 and Windows binaries
         uses: actions/upload-artifact@v4
         with:
           name: linux-windows
           path: |
-            release/windows-amd64/giffer.exe
-            release/windows-386/giffer.exe
-            release/linux-amd64/giffer
-            release/linux-arm64/giffer
+            release/windows-amd64
+            release/windows-386
+            release/linux-amd64
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            libwebkit2gtk-4.0-dev
+
+      - name: Build Linux arm64
+        run: go run ./scripts/release linux/arm64
+
+      - name: Upload Linux arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: release/linux-arm64
 
   build-darwin:
     runs-on: macos-latest
@@ -52,7 +76,8 @@ jobs:
       - name: Build macOS release binaries
         run: |
           mkdir -p release/darwin-amd64 release/darwin-arm64
-          version="$(grep -oE '\*\*Release:\*\* v[0-9]+\.[0-9]+\.[0-9]+' README.md | sed 's/.*v//')"
+          version="$(grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1 | tr -d v)"
+          echo "stamping version $version"
           for pair in "amd64:darwin-amd64" "arm64:darwin-arm64"; do
             arch="${pair%%:*}"
             dir="${pair##*:}"
@@ -67,13 +92,11 @@ jobs:
         with:
           name: darwin
           path: |
-            release/darwin-amd64/giffer
-            release/darwin-amd64/Giffer.app
-            release/darwin-arm64/giffer
-            release/darwin-arm64/Giffer.app
+            release/darwin-amd64
+            release/darwin-arm64
 
   release:
-    needs: [build-linux-windows, build-darwin]
+    needs: [build-linux-windows, build-linux-arm64, build-darwin]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -85,11 +108,12 @@ jobs:
 
       - name: Stage release assets
         run: |
-          mkdir -p release dist
+          mkdir -p release/windows-amd64 release/windows-386 release/linux-amd64 release/linux-arm64 \
+            release/darwin-amd64 release/darwin-arm64 dist
           cp artifacts/linux-windows/windows-amd64/giffer.exe release/windows-amd64/
           cp artifacts/linux-windows/windows-386/giffer.exe release/windows-386/
           cp artifacts/linux-windows/linux-amd64/giffer release/linux-amd64/
-          cp artifacts/linux-windows/linux-arm64/giffer release/linux-arm64/
+          cp artifacts/linux-arm64/linux-arm64/giffer release/linux-arm64/
           cp artifacts/darwin/darwin-amd64/giffer release/darwin-amd64/
           cp -R artifacts/darwin/darwin-amd64/Giffer.app release/darwin-amd64/
           cp artifacts/darwin/darwin-arm64/giffer release/darwin-arm64/
