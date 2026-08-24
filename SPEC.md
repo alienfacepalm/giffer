@@ -19,17 +19,19 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 **Current release: v1.0.0** (Windows, Linux, macOS).
 
-Prebuilt, statically linked binaries (no CGO) are committed under `release/` so users can download and run without installing Go:
+Prebuilt, statically linked binaries (no CGO) are published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go:
 
-| Platform | File |
-|----------|------|
-| Windows (x64) | `release/giffer-windows-amd64.exe` |
-| Linux (x64) | `release/giffer-linux-amd64` |
-| Linux (ARM64) | `release/giffer-linux-arm64` |
-| macOS (Intel) | `release/giffer-darwin-amd64` |
-| macOS (Apple Silicon) | `release/giffer-darwin-arm64` |
+| Platform | Asset |
+|----------|--------|
+| Windows (x64) | `giffer-windows-amd64.exe` |
+| Linux (x64) | `giffer-linux-amd64` |
+| Linux (ARM64) | `giffer-linux-arm64` |
+| macOS (Intel) | `giffer-darwin-amd64` |
+| macOS (Apple Silicon) | `giffer-darwin-arm64` |
 
-Rebuild all of them with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
+Each release also includes `SHA256SUMS`. Pushing a tag matching `v*` (for example `v1.0.1`) runs CI, builds all platforms, and creates the GitHub Release with those assets.
+
+Local rebuilds: `make release` writes the same filenames under `release/` (gitignored build output). Developer builds still go to `bin/` via `make build`.
 
 On Linux/macOS, downloaded binaries need execute permission (`chmod +x`). Put an `upload/` directory next to the binary (or pass `--input`).
 

@@ -1,0 +1,56 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build release binaries
+        run: make release
+
+      - name: Checksums
+        run: |
+          cd release
+          sha256sum giffer-* > SHA256SUMS
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          notes="$(printf '%s\n' \
+            'Statically linked binaries (no CGO). No Go install required.' \
+            '' \
+            '| Platform | File |' \
+            '|----------|------|' \
+            '| Windows (x64) | `giffer-windows-amd64.exe` |' \
+            '| Linux (x64) | `giffer-linux-amd64` |' \
+            '| Linux (ARM64) | `giffer-linux-arm64` |' \
+            '| macOS (Intel) | `giffer-darwin-amd64` |' \
+            '| macOS (Apple Silicon) | `giffer-darwin-arm64` |' \
+            '' \
+            'On Linux/macOS: `chmod +x` the binary, then run it. Put an `upload/` directory next to the binary (or pass `--input`).' \
+            '' \
+            'Local UI: `./giffer ui` (or `giffer-windows-amd64.exe ui` on Windows).')"
+          gh release create "$tag" \
+            --title "giffer ${tag}" \
+            --notes "$notes" \
+            release/giffer-windows-amd64.exe \
+            release/giffer-linux-amd64 \
+            release/giffer-linux-arm64 \
+            release/giffer-darwin-amd64 \
+            release/giffer-darwin-arm64 \
+            release/SHA256SUMS
