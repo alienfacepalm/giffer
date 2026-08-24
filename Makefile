@@ -15,7 +15,7 @@ test:
 	go test ./...
 
 build:
-	go build -o bin/giffer ./cmd/giffer
+	go build -tags desktop -o bin/giffer ./cmd/giffer
 
 # Cross-platform binaries: Windows, Linux (amd64/arm64), macOS (Intel + Apple Silicon).
 # Uses go run so env vars work the same on Windows, Linux, and macOS hosts.

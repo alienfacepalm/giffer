@@ -15,9 +15,23 @@ import (
 
 const gifferHeader = "X-Giffer"
 
-// Run starts the UI on opts.Addr (never remaps to another port), opens the
-// browser, and blocks on Serve. If the address is already in use, it kills the
-// listener and takes over that port — never remaps to a different one.
+// openWindowFunc opens the UI in a native window (desktop builds) or the
+// system browser (non-desktop builds). Overridable in tests.
+var openWindowFunc = openDesktopWindow
+
+// SetOpenWindowForTest replaces the window opener. Pass nil to restore.
+func SetOpenWindowForTest(fn func(url string) error) {
+	if fn == nil {
+		openWindowFunc = openDesktopWindow
+		return
+	}
+	openWindowFunc = fn
+}
+
+// Run starts the UI on opts.Addr (never remaps to another port), opens a native
+// window (or the system browser without the desktop build tag), and blocks on
+// Serve. If the address is already in use, it kills the listener and takes
+// over that port — never remaps to a different one.
 func Run(opts Options, stdout io.Writer) error {
 	if strings.TrimSpace(opts.UploadDir) == "" {
 		opts.UploadDir = DefaultUploadDir()
@@ -51,7 +65,7 @@ func Run(opts Options, stdout io.Writer) error {
 
 	go func() {
 		time.Sleep(150 * time.Millisecond)
-		_ = openBrowserFunc(url)
+		_ = openWindowFunc(url)
 	}()
 
 	return srv.serve(ln)

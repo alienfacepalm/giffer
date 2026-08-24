@@ -60,11 +60,11 @@ func TestRunReclaimsExistingPort(t *testing.T) {
 	t.Cleanup(func() { ui.SetFreePortForTest(nil) })
 
 	opened := make(chan string, 1)
-	ui.SetOpenBrowserForTest(func(u string) error {
+	ui.SetOpenWindowForTest(func(u string) error {
 		opened <- u
 		return nil
 	})
-	t.Cleanup(func() { ui.SetOpenBrowserForTest(nil) })
+	t.Cleanup(func() { ui.SetOpenWindowForTest(nil) })
 
 	var out syncBuffer
 	done := make(chan error, 1)
@@ -95,7 +95,7 @@ func TestRunReclaimsExistingPort(t *testing.T) {
 			t.Fatalf("opened %q, want %s", u, url)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for browser open")
+		t.Fatal("timed out waiting for window open")
 	}
 
 	select {
@@ -108,7 +108,7 @@ func TestRunReclaimsExistingPort(t *testing.T) {
 	}
 }
 
-func TestRunOpensBrowserOnListen(t *testing.T) {
+func TestRunOpensWindowOnListen(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -117,11 +117,11 @@ func TestRunOpensBrowserOnListen(t *testing.T) {
 	_ = ln.Close()
 
 	opened := make(chan string, 1)
-	ui.SetOpenBrowserForTest(func(u string) error {
+	ui.SetOpenWindowForTest(func(u string) error {
 		opened <- u
 		return nil
 	})
-	t.Cleanup(func() { ui.SetOpenBrowserForTest(nil) })
+	t.Cleanup(func() { ui.SetOpenWindowForTest(nil) })
 
 	done := make(chan error, 1)
 	go func() {
@@ -137,7 +137,7 @@ func TestRunOpensBrowserOnListen(t *testing.T) {
 			t.Fatalf("opened %q, want %s", u, url)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for browser open")
+		t.Fatal("timed out waiting for window open")
 	}
 
 	select {

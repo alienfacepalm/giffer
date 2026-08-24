@@ -181,6 +181,18 @@ func isTerminal(r io.Reader) bool {
 	return fileIsTerminal(f)
 }
 
+// shouldLaunchDesktop is true when giffer was started without a console (for
+// example double-clicking the release binary). Tests and piped stdin use
+// non-*os.File streams and fall through to batch mode instead.
+func shouldLaunchDesktop(in io.Reader, out io.Writer) bool {
+	inFile, inOK := in.(*os.File)
+	outFile, outOK := out.(*os.File)
+	if !inOK || !outOK {
+		return false
+	}
+	return !fileIsTerminal(inFile) && !fileIsTerminal(outFile)
+}
+
 func isWriterTerminal(w io.Writer) bool {
 	f, ok := w.(*os.File)
 	if !ok {

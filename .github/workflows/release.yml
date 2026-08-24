@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build-linux-windows:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,11 +18,76 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build release binaries
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc \
+            libwebkit2gtk-4.1-dev \
+            gcc-mingw-w64-x86-64 \
+            gcc-mingw-w64-i686
+
+      - name: Build Linux and Windows release binaries
         run: make release
 
-      - name: Checksums
+      - name: Upload Linux and Windows binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-windows
+          path: |
+            release/windows-amd64/giffer.exe
+            release/windows-386/giffer.exe
+            release/linux-amd64/giffer
+            release/linux-arm64/giffer
+
+  build-darwin:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build macOS release binaries
         run: |
+          mkdir -p release/darwin-amd64 release/darwin-arm64
+          for pair in "amd64:darwin-amd64" "arm64:darwin-arm64"; do
+            arch="${pair%%:*}"
+            dir="${pair##*:}"
+            GOOS=darwin GOARCH="$arch" CGO_ENABLED=1 \
+              go build -tags desktop -trimpath -ldflags="-s -w" \
+              -o "release/$dir/giffer" ./cmd/giffer
+          done
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: darwin
+          path: |
+            release/darwin-amd64/giffer
+            release/darwin-arm64/giffer
+
+  release:
+    needs: [build-linux-windows, build-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release dist
+          cp artifacts/linux-windows/windows-amd64/giffer.exe release/windows-amd64/
+          cp artifacts/linux-windows/windows-386/giffer.exe release/windows-386/
+          cp artifacts/linux-windows/linux-amd64/giffer release/linux-amd64/
+          cp artifacts/linux-windows/linux-arm64/giffer release/linux-arm64/
+          cp artifacts/darwin/darwin-amd64/giffer release/darwin-amd64/
+          cp artifacts/darwin/darwin-arm64/giffer release/darwin-arm64/
           cd release
           sha256sum \
             windows-amd64/giffer.exe \
@@ -32,17 +97,14 @@ jobs:
             darwin-amd64/giffer \
             darwin-arm64/giffer \
             > SHA256SUMS
-
-      - name: Stage GitHub Release assets
-        run: |
-          mkdir -p dist
-          cp release/windows-amd64/giffer.exe dist/giffer-windows-amd64.exe
-          cp release/windows-386/giffer.exe dist/giffer-windows-386.exe
-          cp release/linux-amd64/giffer dist/giffer-linux-amd64
-          cp release/linux-arm64/giffer dist/giffer-linux-arm64
-          cp release/darwin-amd64/giffer dist/giffer-darwin-amd64
-          cp release/darwin-arm64/giffer dist/giffer-darwin-arm64
-          cd dist
+          cp SHA256SUMS ../dist/
+          cp windows-amd64/giffer.exe ../dist/giffer-windows-amd64.exe
+          cp windows-386/giffer.exe ../dist/giffer-windows-386.exe
+          cp linux-amd64/giffer ../dist/giffer-linux-amd64
+          cp linux-arm64/giffer ../dist/giffer-linux-arm64
+          cp darwin-amd64/giffer ../dist/giffer-darwin-amd64
+          cp darwin-arm64/giffer ../dist/giffer-darwin-arm64
+          cd ../dist
           sha256sum giffer-* > SHA256SUMS
 
       - name: Create GitHub Release
@@ -51,7 +113,9 @@ jobs:
         run: |
           tag="${GITHUB_REF_NAME}"
           notes="$(printf '%s\n' \
-            'Statically linked binaries (no CGO). No Go install required.' \
+            'Binaries with embedded webview. No Go install required.' \
+            '' \
+            'Double-click to open the convert UI in a native window, or run `giffer ui`.' \
             '' \
             'Browse by platform under [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release), or download assets below.' \
             '' \
@@ -66,7 +130,7 @@ jobs:
             '' \
             'On Linux/macOS: `chmod +x` the binary, then run it. Put an `upload/` directory next to the binary (or pass `--input`).' \
             '' \
-            'Local UI: `./giffer ui` (or `giffer.exe ui` on Windows).')"
+            'Local UI: double-click the binary or run `./giffer ui` (native window, not a browser tab).')"
           gh release create "$tag" \
             --title "giffer ${tag}" \
             --notes "$notes" \

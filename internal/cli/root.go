@@ -71,8 +71,13 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if noUserParams(cmd) && isTerminal(cmd.InOrStdin()) {
-				return runWizard(cmd, cmd.InOrStdin(), cmd.OutOrStdout())
+			if noUserParams(cmd) {
+				if isTerminal(cmd.InOrStdin()) {
+					return runWizard(cmd, cmd.InOrStdin(), cmd.OutOrStdout())
+				}
+				if shouldLaunchDesktop(cmd.InOrStdin(), cmd.OutOrStdout()) {
+					return runDesktopUI(cmd)
+				}
 			}
 
 			if err := validateTunables(delayMS, maxWidth, loop); err != nil {
@@ -107,7 +112,7 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&input, "input", "", "path to photo archive or directory (omit for batch, or run with no flags for the wizard)")
+	cmd.Flags().StringVar(&input, "input", "", "path to photo archive or directory (omit for batch; no flags on a TTY opens the wizard, double-click opens the UI)")
 	cmd.Flags().StringVar(&output, "output", "", "destination .gif path (default: beside the input)")
 	cmd.Flags().IntVar(&delayMS, "delay-ms", 100, "milliseconds each frame is shown (GIF-safe default; stored in 10ms units)")
 	cmd.Flags().IntVar(&maxWidth, "max-width", 0, "max frame width in px; 0 = first photo width")

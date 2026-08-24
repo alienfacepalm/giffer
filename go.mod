@@ -6,9 +6,11 @@ require (
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
 	github.com/chromedp/chromedp v0.16.0
+	github.com/jchv/go-webview2 v0.0.0-20260205173254-56598839c808
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.16
+	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 	golang.org/x/image v0.23.0
 	golang.org/x/sys v0.47.0
 )
@@ -24,6 +26,7 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/klauspost/compress v1.19.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.27 // indirect
 	github.com/spf13/afero v1.15.0 // indirect

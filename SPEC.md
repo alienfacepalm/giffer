@@ -2,14 +2,14 @@
 
 ## Overview
 
-Giffer turns a **series of photos** — from a supported archive or a directory — into a single animated GIF. Delivery is phased: **Phase 1 is the CLI** (required). **Phase 2 is a local browser UI** (`giffer ui`) that reuses the Phase 1 conversion core and the same parameters.
+Giffer turns a **series of photos** — from a supported archive or a directory — into a single animated GIF. Delivery is phased: **Phase 1 is the CLI** (required). **Phase 2 is a local desktop UI** (embedded webview) that reuses the Phase 1 conversion core and the same parameters.
 
 ## Phases
 
 | Phase | Scope | Status |
 |-------|--------|--------|
 | **1 — CLI** | Archive/dir path in → GIF on disk; batch mode for `upload/`; interactive wizard; all conversion behavior and parameters | Required — shipped |
-| **2 — UI** | Thin local upload UI wrapping the same converter and parameters (`giffer ui`) | Optional — shipped |
+| **2 — UI** | Thin local upload UI in a native window wrapping the same converter and parameters (`giffer ui` or double-click) | Optional — shipped |
 
 Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is optional but is implemented and must not fork conversion logic.
 
@@ -17,9 +17,9 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: v1.0.2** (Windows, Linux, macOS).
+**Current release: v1.1.0** (Windows, Linux, macOS).
 
-Prebuilt, statically linked binaries (no CGO) are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
+Prebuilt binaries with embedded webview are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
 
 | Platform | Path |
 |----------|------|
@@ -30,7 +30,9 @@ Prebuilt, statically linked binaries (no CGO) are committed under `release/<plat
 | macOS (Intel) | `release/darwin-amd64/giffer` |
 | macOS (Apple Silicon) | `release/darwin-arm64/giffer` |
 
-GitHub Releases also include `SHA256SUMS` (asset names stay `giffer-<os>-<arch>` for clarity). Pushing a tag matching `v*` (for example `v1.0.2`) runs CI, builds all platforms, and uploads those assets. Rebuild committed copies with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
+GitHub Releases also include `SHA256SUMS` (asset names stay `giffer-<os>-<arch>` for clarity). Pushing a tag matching `v*` (for example `v1.1.0`) runs CI, builds all platforms, and uploads those assets. Rebuild committed copies with `make release`. Local developer builds still go to `bin/` via `make build` (not committed).
+
+Double-clicking a release binary opens the Phase 2 UI in a native window. From a terminal with no flags on a TTY, Phase 1 wizard runs instead. `giffer ui` always opens the UI window.
 
 On Linux/macOS, downloaded binaries need execute permission (`chmod +x`). Put an `upload/` directory next to the binary (or pass `--input`).
 
@@ -179,6 +181,12 @@ With **no flags** on a terminal, giffer opens the interactive wizard. Omitting `
 
 Must not change Phase 1 conversion behavior; call the same conversion core and parameters.
 
+### Launch
+
+- **Double-click** the release binary (no attached console) → native UI window.
+- **`giffer ui`** → same native window.
+- Terminal **`giffer`** with no flags on a TTY → Phase 1 wizard (unchanged).
+
 ### Command
 
 ```bash
@@ -191,9 +199,17 @@ giffer ui --addr 127.0.0.1:8765 --upload-dir upload
 | `--addr` | `127.0.0.1:8765` | Listen address; **never remapped** to another port |
 | `--upload-dir` | beside the binary (`<exe-dir>/upload`) | Directory for uploaded archives and GIF output; during `go run` / `go test` falls back to `upload/` in the working directory |
 
-- The UI is fully self-contained in the release binary (HTML/CSS/JS, Three.js, fonts). No CDN or network is required beyond opening the local page in the system browser (Windows, Linux, macOS).
-- Opens the default browser to the UI URL after listen succeeds.
+- The UI is fully self-contained in the release binary (HTML/CSS/JS, Three.js, fonts). No CDN or network is required. The UI runs in an **embedded OS webview** (native window) — not an external browser tab.
+- A local HTTP server on `--addr` serves the embedded assets and conversion API to the webview.
 - If the configured address is already in use, giffer **reclaims** that port (stops the prior listener) and binds the same address — it does not pick a free alternate port.
+
+### Platform requirements (embedded webview)
+
+| OS | Runtime | Build (release) |
+|----|---------|-----------------|
+| Windows | WebView2 Runtime (Windows 10/11) | go-webview2, no CGO |
+| Linux | `libwebkit2gtk-4.1-0` (or 4.0) | `libwebkit2gtk-4.1-dev`, CGO |
+| macOS | System WebKit | Xcode CLT, CGO |
 
 ### UI sketch
 

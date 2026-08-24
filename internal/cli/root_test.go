@@ -427,7 +427,7 @@ func TestRunUIHelp(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("code=%d stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "local convert UI") {
+	if !strings.Contains(stdout.String(), "native window") {
 		t.Fatalf("help=%q", stdout.String())
 	}
 }

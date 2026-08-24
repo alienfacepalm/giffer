@@ -1,6 +1,6 @@
 # giffer downloads
 
-Statically linked binaries (no CGO, no Go install). Pick your platform folder, download the binary inside, and run it.
+Binaries with an embedded webview for the convert UI. Pick your platform folder, download the binary, and run it.
 
 | Folder | OS / CPU | Binary |
 |--------|----------|--------|
@@ -13,19 +13,29 @@ Statically linked binaries (no CGO, no Go install). Pick your platform folder, d
 
 ## Quick start
 
-**Linux / macOS**
+**Double-click** `giffer` / `giffer.exe` to open the convert UI in a native window.
+
+**Linux / macOS (terminal)**
 
 ```bash
 chmod +x giffer
-./giffer
+./giffer          # wizard on a TTY
+./giffer ui       # UI window
 ```
 
 **Windows (PowerShell)**
 
 ```powershell
-.\giffer.exe
+.\giffer.exe      # wizard in a terminal
+.\giffer.exe ui   # UI window
 ```
 
-Put photo archives or folders in an `upload/` directory next to the binary (or pass `--input`). Local UI: `./giffer ui` (or `giffer.exe ui` on Windows).
+Put photo archives or folders in an `upload/` directory next to the binary (or pass `--input`).
+
+| OS | Notes |
+|----|-------|
+| Windows | WebView2 Runtime (included on Windows 10/11) |
+| Linux | Install `libwebkit2gtk-4.1-0` (or 4.0) if missing |
+| macOS | Uses system WebKit |
 
 Tagged [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) mirror these builds and include `SHA256SUMS`.
