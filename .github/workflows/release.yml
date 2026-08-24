@@ -24,7 +24,13 @@ jobs:
       - name: Checksums
         run: |
           cd release
-          sha256sum giffer-* > SHA256SUMS
+          sha256sum \
+            windows-amd64/giffer.exe \
+            linux-amd64/giffer \
+            linux-arm64/giffer \
+            darwin-amd64/giffer \
+            darwin-arm64/giffer \
+            > SHA256SUMS
 
       - name: Create GitHub Release
         env:
@@ -34,23 +40,25 @@ jobs:
           notes="$(printf '%s\n' \
             'Statically linked binaries (no CGO). No Go install required.' \
             '' \
-            '| Platform | File |' \
+            'Browse by platform under [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release), or download assets below.' \
+            '' \
+            '| Platform | Path |' \
             '|----------|------|' \
-            '| Windows (x64) | `giffer-windows-amd64.exe` |' \
-            '| Linux (x64) | `giffer-linux-amd64` |' \
-            '| Linux (ARM64) | `giffer-linux-arm64` |' \
-            '| macOS (Intel) | `giffer-darwin-amd64` |' \
-            '| macOS (Apple Silicon) | `giffer-darwin-arm64` |' \
+            '| Windows (x64) | `release/windows-amd64/giffer.exe` |' \
+            '| Linux (x64) | `release/linux-amd64/giffer` |' \
+            '| Linux (ARM64) | `release/linux-arm64/giffer` |' \
+            '| macOS (Intel) | `release/darwin-amd64/giffer` |' \
+            '| macOS (Apple Silicon) | `release/darwin-arm64/giffer` |' \
             '' \
             'On Linux/macOS: `chmod +x` the binary, then run it. Put an `upload/` directory next to the binary (or pass `--input`).' \
             '' \
-            'Local UI: `./giffer ui` (or `giffer-windows-amd64.exe ui` on Windows).')"
+            'Local UI: `./giffer ui` (or `giffer.exe ui` on Windows).')"
           gh release create "$tag" \
             --title "giffer ${tag}" \
             --notes "$notes" \
-            release/giffer-windows-amd64.exe \
-            release/giffer-linux-amd64 \
-            release/giffer-linux-arm64 \
-            release/giffer-darwin-amd64 \
-            release/giffer-darwin-arm64 \
+            "release/windows-amd64/giffer.exe#giffer-windows-amd64.exe" \
+            "release/linux-amd64/giffer#giffer-linux-amd64" \
+            "release/linux-arm64/giffer#giffer-linux-arm64" \
+            "release/darwin-amd64/giffer#giffer-darwin-amd64" \
+            "release/darwin-arm64/giffer#giffer-darwin-arm64" \
             release/SHA256SUMS

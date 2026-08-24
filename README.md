@@ -6,27 +6,27 @@ Turn a **series of photos** (archive or folder) into an animated GIF.
 
 ## Download
 
-Prebuilt binaries live in [`release/`](release/) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
+Prebuilt binaries live under [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release) (one directory per platform) and on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) (includes `SHA256SUMS`):
 
-| Platform | File |
+| Platform | Path |
 |----------|------|
-| Windows (x64) | [`giffer-windows-amd64.exe`](release/giffer-windows-amd64.exe) |
-| Linux (x64) | [`giffer-linux-amd64`](release/giffer-linux-amd64) |
-| Linux (ARM64) | [`giffer-linux-arm64`](release/giffer-linux-arm64) |
-| macOS (Intel) | [`giffer-darwin-amd64`](release/giffer-darwin-amd64) |
-| macOS (Apple Silicon) | [`giffer-darwin-arm64`](release/giffer-darwin-arm64) |
+| Windows (x64) | [`windows-amd64/giffer.exe`](release/windows-amd64/giffer.exe) |
+| Linux (x64) | [`linux-amd64/giffer`](release/linux-amd64/giffer) |
+| Linux (ARM64) | [`linux-arm64/giffer`](release/linux-arm64/giffer) |
+| macOS (Intel) | [`darwin-amd64/giffer`](release/darwin-amd64/giffer) |
+| macOS (Apple Silicon) | [`darwin-arm64/giffer`](release/darwin-arm64/giffer) |
 
-Download the file for your OS, then:
+Open your platform folder, download the binary, then:
 
 ```bash
 # Linux / macOS
-chmod +x giffer-linux-amd64   # or darwin-arm64 / darwin-amd64
-./giffer-linux-amd64
+chmod +x giffer
+./giffer
 ```
 
 ```powershell
 # Windows
-.\giffer-windows-amd64.exe
+.\giffer.exe
 ```
 
 Put photo archives or folders in an `upload/` directory next to the binary (or pass `--input`).

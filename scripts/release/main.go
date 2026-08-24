@@ -10,13 +10,24 @@ import (
 
 func main() {
 	targets := []struct {
-		goos, goarch, out string
+		goos, goarch, dir, name string
 	}{
-		{"windows", "amd64", "giffer-windows-amd64.exe"},
-		{"linux", "amd64", "giffer-linux-amd64"},
-		{"linux", "arm64", "giffer-linux-arm64"},
-		{"darwin", "amd64", "giffer-darwin-amd64"},
-		{"darwin", "arm64", "giffer-darwin-arm64"},
+		{"windows", "amd64", "windows-amd64", "giffer.exe"},
+		{"linux", "amd64", "linux-amd64", "giffer"},
+		{"linux", "arm64", "linux-arm64", "giffer"},
+		{"darwin", "amd64", "darwin-amd64", "giffer"},
+		{"darwin", "arm64", "darwin-arm64", "giffer"},
+	}
+
+	// Remove legacy flat binaries from older layouts.
+	for _, legacy := range []string{
+		"giffer-windows-amd64.exe",
+		"giffer-linux-amd64",
+		"giffer-linux-arm64",
+		"giffer-darwin-amd64",
+		"giffer-darwin-arm64",
+	} {
+		_ = os.Remove(filepath.Join("release", legacy))
 	}
 
 	if err := os.MkdirAll("release", 0o755); err != nil {
@@ -24,7 +35,11 @@ func main() {
 	}
 
 	for _, t := range targets {
-		out := filepath.Join("release", t.out)
+		dir := filepath.Join("release", t.dir)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			fail(err)
+		}
+		out := filepath.Join(dir, t.name)
 		fmt.Printf("building %s/%s → %s\n", t.goos, t.goarch, out)
 		cmd := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", out, "./cmd/giffer")
 		cmd.Env = append(os.Environ(),
