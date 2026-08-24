@@ -32,6 +32,17 @@ jobs:
             darwin-arm64/giffer \
             > SHA256SUMS
 
+      - name: Stage GitHub Release assets
+        run: |
+          mkdir -p dist
+          cp release/windows-amd64/giffer.exe dist/giffer-windows-amd64.exe
+          cp release/linux-amd64/giffer dist/giffer-linux-amd64
+          cp release/linux-arm64/giffer dist/giffer-linux-arm64
+          cp release/darwin-amd64/giffer dist/giffer-darwin-amd64
+          cp release/darwin-arm64/giffer dist/giffer-darwin-arm64
+          cd dist
+          sha256sum giffer-* > SHA256SUMS
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,9 +67,9 @@ jobs:
           gh release create "$tag" \
             --title "giffer ${tag}" \
             --notes "$notes" \
-            "release/windows-amd64/giffer.exe#giffer-windows-amd64.exe" \
-            "release/linux-amd64/giffer#giffer-linux-amd64" \
-            "release/linux-arm64/giffer#giffer-linux-arm64" \
-            "release/darwin-amd64/giffer#giffer-darwin-amd64" \
-            "release/darwin-arm64/giffer#giffer-darwin-arm64" \
-            release/SHA256SUMS
+            dist/giffer-windows-amd64.exe \
+            dist/giffer-linux-amd64 \
+            dist/giffer-linux-arm64 \
+            dist/giffer-darwin-amd64 \
+            dist/giffer-darwin-arm64 \
+            dist/SHA256SUMS
