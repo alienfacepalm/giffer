@@ -17,7 +17,7 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: v1.0.0** (Windows, Linux, macOS).
+**Current release: v1.0.1** (Windows, Linux, macOS).
 
 Prebuilt, statically linked binaries (no CGO) are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
 
@@ -199,8 +199,9 @@ giffer ui --addr 127.0.0.1:8765 --upload-dir upload
 - Photo-archive drop zone or file picker (`input`); copy explains a **series of photos in one archive**; supported formats shown as compact chips (zip, tar.gz, tar.bz2, tar.xz, tar, 7z). Chosen sources are treated like files under `upload/`.
 - Fields for `delay-ms`, `max-width`, and `loop` (pre-filled with Phase 1 defaults).
 - Output as download and/or path chooser (`output`).
-- One primary **Convert** action.
+- One primary **Convert** action and a **Reset** control that restores defaults (file cleared, `delay-ms` / `max-width` / `loop` to Phase 1 defaults, progress/status/preview cleared; aborts an in-flight convert).
 - Realtime progress while converting (reading → encoding → writing); clear error text on failure; success state with the resulting GIF available.
+- Progress events always include numeric `done`, `total`, and `percent` (zero is sent, not omitted). User-visible copy must never show `undefined`, `null`, or `NaN`.
 - Branding and contrast: UI keeps brand text readable against the page background (including light/dark contrast schemes as needed).
 
 ### Success and failure (UI)

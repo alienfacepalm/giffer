@@ -9,4 +9,5 @@ alwaysApply: true
 - Prefer table-driven tests; cover SPEC edge cases (bad zip, no images, invalid flags, sort order, resize).
 - Do not commit files under `upload/` (except `upload/.gitkeep`); use tiny synthetic fixtures in tests.
 - Before finishing Go changes, run `go test ./...` and `go vet ./...`. Prefer `make check` when Make is available.
+- Cross-platform release binaries go under `release/<platform>/` via `make release` (for example `release/windows-amd64/giffer.exe`); do not commit loose `.exe` files outside `release/`.
 - Use `cli.Run` for command tests; do not shell out to the binary in unit tests.

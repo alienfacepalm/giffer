@@ -2,7 +2,7 @@
 
 Turn a **series of photos** (archive or folder) into an animated GIF.
 
-**Release:** v1.0.0 — Windows, Linux, and macOS.
+**Release:** v1.0.1 — Windows, Linux, and macOS.
 
 ## Download
 
@@ -67,7 +67,12 @@ Single conversion:
 
 Opens a local page at `http://127.0.0.1:8765` — always that port, never a random one. If something is already listening there, `giffer ui` kills it and takes over. Override with `--addr`.
 
-Works the same on Windows, Linux, and macOS: all UI assets (including fonts and Three.js) are embedded in the binary, so the page loads fully offline. Drop a photo archive (zip, tar.gz, 7z, and other supported formats). Uploaded archives and GIF output land in `upload/` next to the binary (override with `--upload-dir`).
+Works the same on Windows, Linux, and macOS: all UI assets (including fonts and Three.js) are embedded in the binary, so the page loads fully offline. Drop a photo archive (zip, tar.gz, 7z, and other supported formats). Uploaded archives and GIF output land in `upload/` next to the binary (override with `--upload-dir`). **Reset** clears the form, preview, and in-flight convert.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--addr` | `127.0.0.1:8765` | Listen address (fixed; never remapped) |
+| `--upload-dir` | beside the binary | Uploaded archives and GIF output |
 
 ## Build
 

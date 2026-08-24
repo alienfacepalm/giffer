@@ -10,3 +10,4 @@ alwaysApply: true
 - Do not leave loose input zips at the repo root.
 - Default GIF output (when `--output` is omitted) stays beside the input under `upload/`.
 - Bare `./giffer` on a terminal opens the CLI wizard; non-interactive / flagged runs batch-process `upload/` and skip sources that already have a matching `.gif`.
+- Prebuilt binaries live under `release/<platform>/` (for example `release/linux-amd64/giffer`) and on GitHub Releases; docs link to `release/` on the default branch.
