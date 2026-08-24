@@ -1,6 +1,6 @@
 # Download giffer
 
-**Latest release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)**
+**Latest release: [v1.2.0](https://github.com/alienfacepalm/giffer/releases/latest)**
 
 Turn a folder or zip of photos into an animated GIF. No install, no terminal required — just download and double-click.
 

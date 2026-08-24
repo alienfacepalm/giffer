@@ -17,7 +17,7 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)** (Windows, Linux, macOS).
+**Current release: [v1.2.0](https://github.com/alienfacepalm/giffer/releases/latest)** (Windows, Linux, macOS).
 
 ### Quick start (users)
 

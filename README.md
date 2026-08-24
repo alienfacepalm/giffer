@@ -2,7 +2,7 @@
 
 Turn a **series of photos** (zip or folder) into an animated GIF.
 
-**Latest release: [v1.1.1](https://github.com/alienfacepalm/giffer/releases/latest)** — Windows, Mac, and Linux. Download, double-click, convert.
+**Latest release: [v1.2.0](https://github.com/alienfacepalm/giffer/releases/latest)** — Windows, Mac, and Linux. Download, double-click, convert.
 
 ## Quick start
 
