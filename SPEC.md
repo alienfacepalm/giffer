@@ -17,13 +17,14 @@ Phase 1 is complete when the CLI implements this spec end to end. Phase 2 is opt
 
 ## Distribution
 
-**Current release: v1.0.1** (Windows, Linux, macOS).
+**Current release: v1.1.0** (Windows, Linux, macOS).
 
 Prebuilt, statically linked binaries (no CGO) are committed under `release/<platform>/` and also published on [GitHub Releases](https://github.com/alienfacepalm/giffer/releases) so users can download and run without installing Go. Browse platforms at [`release/`](https://github.com/alienfacepalm/giffer/tree/master/release):
 
 | Platform | Path |
 |----------|------|
 | Windows (x64) | `release/windows-amd64/giffer.exe` |
+| Windows (x86) | `release/windows-386/giffer.exe` |
 | Linux (x64) | `release/linux-amd64/giffer` |
 | Linux (ARM64) | `release/linux-arm64/giffer` |
 | macOS (Intel) | `release/darwin-amd64/giffer` |

@@ -5,6 +5,7 @@ Statically linked binaries (no CGO, no Go install). Pick your platform folder, d
 | Folder | OS / CPU | Binary |
 |--------|----------|--------|
 | [`windows-amd64/`](windows-amd64/) | Windows x64 | `giffer.exe` |
+| [`windows-386/`](windows-386/) | Windows x86 (32-bit) | `giffer.exe` |
 | [`linux-amd64/`](linux-amd64/) | Linux x64 | `giffer` |
 | [`linux-arm64/`](linux-arm64/) | Linux ARM64 | `giffer` |
 | [`darwin-amd64/`](darwin-amd64/) | macOS Intel | `giffer` |

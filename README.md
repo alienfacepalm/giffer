@@ -2,7 +2,7 @@
 
 Turn a **series of photos** (archive or folder) into an animated GIF.
 
-**Release:** v1.0.1 — Windows, Linux, and macOS.
+**Release:** v1.1.0 — Windows, Linux, and macOS.
 
 ## Download
 
@@ -11,6 +11,7 @@ Prebuilt binaries live under [`release/`](https://github.com/alienfacepalm/giffe
 | Platform | Path |
 |----------|------|
 | Windows (x64) | [`windows-amd64/giffer.exe`](release/windows-amd64/giffer.exe) |
+| Windows (x86) | [`windows-386/giffer.exe`](release/windows-386/giffer.exe) |
 | Linux (x64) | [`linux-amd64/giffer`](release/linux-amd64/giffer) |
 | Linux (ARM64) | [`linux-arm64/giffer`](release/linux-arm64/giffer) |
 | macOS (Intel) | [`darwin-amd64/giffer`](release/darwin-amd64/giffer) |

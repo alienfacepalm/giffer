@@ -13,6 +13,7 @@ func main() {
 		goos, goarch, dir, name string
 	}{
 		{"windows", "amd64", "windows-amd64", "giffer.exe"},
+		{"windows", "386", "windows-386", "giffer.exe"},
 		{"linux", "amd64", "linux-amd64", "giffer"},
 		{"linux", "arm64", "linux-arm64", "giffer"},
 		{"darwin", "amd64", "darwin-amd64", "giffer"},
