@@ -119,7 +119,7 @@ jobs:
           cp artifacts/linux-windows/windows-amd64/giffer.exe release/windows-amd64/
           cp artifacts/linux-windows/windows-386/giffer.exe release/windows-386/
           cp artifacts/linux-windows/linux-amd64/giffer release/linux-amd64/
-          cp artifacts/linux-arm64/linux-arm64/giffer release/linux-arm64/
+          cp artifacts/linux-arm64/giffer release/linux-arm64/
           cp artifacts/darwin/darwin-amd64/giffer release/darwin-amd64/
           cp -R artifacts/darwin/darwin-amd64/Giffer.app release/darwin-amd64/
           cp artifacts/darwin/darwin-arm64/giffer release/darwin-arm64/
