@@ -4,6 +4,7 @@
   const drop = document.getElementById("drop");
   const dropLabel = document.getElementById("drop-label");
   const go = document.getElementById("go");
+  const resetBtn = document.getElementById("reset");
   const status = document.getElementById("status");
   const progress = document.getElementById("progress");
   const progressBar = document.getElementById("progress-bar");
@@ -15,6 +16,9 @@
   const forge = document.getElementById("forge");
   const forgeCanvas = document.getElementById("forge-canvas");
   const forgeCaption = document.getElementById("forge-caption");
+
+  /** @type {AbortController | null} */
+  let convertAbort = null;
 
   const stageLabel = {
     reading: "Reading frames",
@@ -206,19 +210,41 @@
     return msg;
   }
 
+  function asNumber(value, fallback) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  /** Never put undefined/null/NaN into visible UI copy. */
+  function safeLabel(parts) {
+    return parts
+      .map((p) => {
+        if (p == null) return "";
+        if (typeof p === "number" && !Number.isFinite(p)) return "";
+        const s = String(p);
+        if (s === "undefined" || s === "null" || s === "NaN") return "";
+        return s;
+      })
+      .filter(Boolean)
+      .join("");
+  }
+
   function setStatus(text, kind) {
-    status.hidden = !text;
-    status.textContent = text || "";
+    const msg = text == null ? "" : String(text);
+    const clean =
+      msg === "undefined" || msg === "null" || msg === "NaN" ? "" : msg;
+    status.hidden = !clean;
+    status.textContent = clean;
     status.classList.toggle("is-error", kind === "error");
     status.classList.toggle("is-ok", kind === "ok");
   }
 
   function setProgress(pct, label) {
-    const n = Math.max(0, Math.min(100, pct | 0));
+    const n = Math.max(0, Math.min(100, asNumber(pct, 0) | 0));
     progress.hidden = false;
     progressBar.value = n;
-    progressPct.textContent = n + "%";
-    if (label) progressLabel.textContent = label;
+    progressPct.textContent = safeLabel([n, "%"]);
+    if (label) progressLabel.textContent = safeLabel([label]);
   }
 
   function hideProgress() {
@@ -239,6 +265,23 @@
     download.hidden = true;
     preview.removeAttribute("src");
     download.removeAttribute("href");
+  }
+
+  /** Restore file, fields, progress, status, and preview to first-load defaults. */
+  function resetToBaseline() {
+    if (convertAbort) {
+      convertAbort.abort();
+      convertAbort = null;
+    }
+    form.reset();
+    fileInput.value = "";
+    drop.classList.remove("is-drag");
+    setFileName("");
+    setStatus("");
+    hideProgress();
+    clearPreview();
+    go.disabled = false;
+    if (resetBtn) resetBtn.disabled = false;
   }
 
   function showPreview(url, filename) {
@@ -312,10 +355,15 @@
         }
         if (ev.type === "progress") {
           const stage = stageLabel[ev.stage] || "Converting";
+          const done = asNumber(ev.done, 0);
+          const total = asNumber(ev.total, 0);
+          const pct = asNumber(ev.percent, 0);
           const detail =
-            ev.total > 0 ? `${stage} (${ev.done}/${ev.total})` : stage;
-          setProgress(ev.percent ?? 0, detail);
-          updateForge(ev.percent ?? 0, detail);
+            total > 0
+              ? safeLabel([stage, " (", done, "/", total, ")"])
+              : stage;
+          setProgress(pct, detail);
+          updateForge(pct, detail);
         } else if (ev.type === "error") {
           throw new Error(ev.error || "Conversion failed.");
         } else if (ev.type === "done") {
@@ -338,6 +386,12 @@
     return final;
   }
 
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      resetToBaseline();
+    });
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     clearPreview();
@@ -357,13 +411,18 @@
     body.set("max-width", document.getElementById("max-width").value);
     body.set("loop", document.getElementById("loop").value);
 
+    if (convertAbort) convertAbort.abort();
+    const ac = new AbortController();
+    convertAbort = ac;
+    const { signal } = ac;
+
     go.disabled = true;
     setProgress(0, "Uploading…");
     startForge();
     updateForge(0, "Opening the archive…");
 
     try {
-      const res = await fetch("/api/convert", { method: "POST", body });
+      const res = await fetch("/api/convert", { method: "POST", body, signal });
       if (!res.ok && !(res.headers.get("content-type") || "").includes("ndjson")) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Conversion failed.");
@@ -374,10 +433,14 @@
       showPreview(url, filename);
       setStatus("Ready - " + data.output, "ok");
     } catch (err) {
+      if (err && err.name === "AbortError") {
+        return;
+      }
       hideProgress();
       clearPreview();
       setStatus(friendlyError(err), "error");
     } finally {
+      if (convertAbort === ac) convertAbort = null;
       go.disabled = false;
     }
   });

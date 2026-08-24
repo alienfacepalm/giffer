@@ -342,20 +342,30 @@ body {
   outline-offset: 1px;
 }
 
-button#go {
+.actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.55rem;
   flex: 0 0 auto;
-  width: 100%;
+  align-items: stretch;
+}
+
+button#go,
+button#reset {
   margin: 0;
-  border: 0;
-  background: var(--ink);
-  color: var(--btn-ink);
   font-family: var(--display);
   font-weight: 700;
   font-size: clamp(0.9rem, 2vh, 1.05rem);
   letter-spacing: -0.02em;
   padding: 0.65rem 1.2rem;
   cursor: pointer;
-  transition: transform 140ms ease, background-color 140ms ease;
+  transition: transform 140ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+button#go {
+  border: 0;
+  background: var(--ink);
+  color: var(--btn-ink);
 }
 
 button#go:hover:not(:disabled) {
@@ -366,6 +376,24 @@ button#go:hover:not(:disabled) {
 
 button#go:disabled {
   opacity: 0.55;
+  cursor: wait;
+}
+
+button#reset {
+  border: 1px solid var(--field-border);
+  background: transparent;
+  color: var(--muted);
+  padding-inline: 1rem;
+}
+
+button#reset:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--ink);
+  transform: translateY(-1px);
+}
+
+button#reset:disabled {
+  opacity: 0.45;
   cursor: wait;
 }
 
@@ -669,7 +697,12 @@ button#go:disabled {
     gap: 0.75rem;
   }
 
-  button#go {
+  .actions {
+    grid-template-columns: 1fr;
+  }
+
+  button#go,
+  button#reset {
     padding: 0.7rem 1.25rem;
   }
 

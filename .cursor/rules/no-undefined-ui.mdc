@@ -1,0 +1,13 @@
+---
+description: Never show undefined/null/NaN in user-facing UI text
+alwaysApply: true
+---
+
+# No Undefined in UI Copy
+
+Never let `undefined`, `null`, or `NaN` appear in user-visible strings (labels, status, progress, captions, errors).
+
+- Coerce API/progress numbers with a finite fallback before interpolating (e.g. `asNumber(v, 0)`).
+- Build labels from validated parts; do not use raw template strings like `` `${done}/${total}` `` when fields may be missing.
+- Prefer sending zero values in JSON for progress fields (`done`, `total`, `percent`) instead of omitting them with `omitempty`.
+- If a value is missing, show a clear fallback ("Converting…", "0", omit the detail) — never the words `undefined`, `null`, or `NaN`.

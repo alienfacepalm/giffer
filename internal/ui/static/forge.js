@@ -182,7 +182,11 @@
   }
 
   function setCaption(text) {
-    if (caption) caption.textContent = text;
+    if (!caption) return;
+    if (text == null) return;
+    const s = String(text);
+    if (!s || s === "undefined" || s === "null" || s === "NaN") return;
+    caption.textContent = s;
   }
 
   function start(mountEl, opts) {
@@ -292,9 +296,11 @@
   }
 
   function setProgress(pct, label) {
-    progress = Math.max(0, Math.min(1, (pct || 0) / 100));
-    if (label) setCaption(label);
-    else if (progress >= 0.95) setCaption("Sealing the GIF…");
+    const n = Number(pct);
+    progress = Math.max(0, Math.min(1, (Number.isFinite(n) ? n : 0) / 100));
+    if (label != null && String(label) !== "" && String(label) !== "undefined") {
+      setCaption(label);
+    } else if (progress >= 0.95) setCaption("Sealing the GIF…");
     else if (progress >= 0.55) setCaption("Weaving motion…");
     else if (progress >= 0.15) setCaption("Gathering frames…");
     else setCaption("Conjuring frames…");

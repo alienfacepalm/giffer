@@ -78,12 +78,13 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Addr() string { return s.opts.Addr }
 
 type convertResponse struct {
-	OK     bool   `json:"ok,omitempty"`
-	Type   string `json:"type,omitempty"` // "progress" | "done" | "error" (NDJSON stream)
-	Stage  string `json:"stage,omitempty"`
-	Done   int    `json:"done,omitempty"`
-	Total  int    `json:"total,omitempty"`
-	Pct    int    `json:"percent,omitempty"`
+	OK    bool   `json:"ok,omitempty"`
+	Type  string `json:"type,omitempty"` // "progress" | "done" | "error" (NDJSON stream)
+	Stage string `json:"stage,omitempty"`
+	// Done/Total/Pct omit omitempty so 0 is still sent (UI must never see undefined).
+	Done   int    `json:"done"`
+	Total  int    `json:"total"`
+	Pct    int    `json:"percent"`
 	Output string `json:"output,omitempty"`
 	URL    string `json:"url,omitempty"`
 	Error  string `json:"error,omitempty"`

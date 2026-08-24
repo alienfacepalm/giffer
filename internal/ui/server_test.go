@@ -66,6 +66,9 @@ func TestIndexAndAssets(t *testing.T) {
 	if !strings.Contains(html, `id="forge"`) {
 		t.Fatal("index missing forge mount for generating animation")
 	}
+	if !strings.Contains(html, `id="reset"`) {
+		t.Fatal("index missing Reset control to restore baseline")
+	}
 
 	cssRes, err := http.Get(ts.URL + "/app.css")
 	if err != nil {
@@ -98,6 +101,9 @@ func TestIndexAndAssets(t *testing.T) {
 	jsRes.Body.Close()
 	if !strings.Contains(string(jsBody), "__gifferContrast") {
 		t.Fatal("app.js missing contrast helper export for e2e checks")
+	}
+	if !strings.Contains(string(jsBody), "resetToBaseline") {
+		t.Fatal("app.js missing resetToBaseline for clearing UI state")
 	}
 }
 
@@ -171,6 +177,11 @@ func TestConvertAPI(t *testing.T) {
 			sawProgress = true
 			if ev.Percent < 0 || ev.Percent > 100 {
 				t.Fatalf("percent=%d", ev.Percent)
+			}
+			// Zero counters must be present in JSON (not omitted) so the UI
+			// never interpolates undefined into "Writing GIF (undefined/1)".
+			if !strings.Contains(line, `"done"`) || !strings.Contains(line, `"total"`) || !strings.Contains(line, `"percent"`) {
+				t.Fatalf("progress event missing numeric fields: %s", line)
 			}
 		case "done":
 			got.OK = ev.OK
